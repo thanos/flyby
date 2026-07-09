@@ -1,0 +1,46 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/flyby",
+    "crates/flyby-core",
+    "crates/flyby-memory",
+    "crates/flyby-net",
+    "crates/flyby-storage",
+    "examples",
+    "benches",
+    "simulator",
+]
+default-members = ["crates/flyby"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/anomalyco/flyby"
+homepage = "https://github.com/anomalyco/flyby"
+authors = ["FlyBy Contributors"]
+description = "A high-performance Rust framework for composable data-ingestion pipelines."
+readme = "README.md"
+
+[workspace.dependencies]
+flyby = { path = "crates/flyby", version = "0.1.0" }
+flyby-core = { path = "crates/flyby-core", version = "0.1.0" }
+flyby-memory = { path = "crates/flyby-memory", version = "0.1.0" }
+flyby-net = { path = "crates/flyby-net", version = "0.1.0" }
+flyby-storage = { path = "crates/flyby-storage", version = "0.1.0" }
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+debug = false
+strip = "symbols"
+
+[profile.bench]
+inherits = "release"
+debug = true
+
+[profile.dev]
+opt-level = 0
+debug = true

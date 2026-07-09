@@ -1,0 +1,23 @@
+[book]
+title = "FlyBy"
+authors = ["FlyBy Contributors"]
+description = "A high-performance Rust framework for composable data-ingestion pipelines."
+language = "en"
+multilingual = false
+src = "src"
+
+[rust]
+edition = "2024"
+
+[output.html]
+git-repository-url = "https://github.com/anomalyco/flyby"
+edit-url-template = "https://github.com/anomalyco/flyby/edit/main/docs/src/{path}"
+no-section-label = false
+
+[output.html.search]
+enable = true
+limit-results = 30
+use-boolean-and = true
+boost-title = 2
+boost-hierarchy = 1
+boost-paragraph = 1

@@ -1,0 +1,18 @@
+[package]
+name = "flyby-examples"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+description = "Runnable examples for the FlyBy framework."
+publish = false
+
+[dependencies]
+flyby = { workspace = true, features = ["memory"] }
+
+[[bin]]
+name = "hello_pipeline"
+path = "src/bin/hello_pipeline.rs"

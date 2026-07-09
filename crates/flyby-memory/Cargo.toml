@@ -1,0 +1,17 @@
+[package]
+name = "flyby-memory"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+description = "Shared-memory sink for the FlyBy framework."
+
+[lib]
+name = "flyby_memory"
+path = "src/lib.rs"
+
+[dependencies]
+flyby-core = { workspace = true }

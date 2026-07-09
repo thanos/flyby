@@ -1,0 +1,29 @@
+services:
+  flyby-dev:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        RUST_VERSION: "1.91.1"
+        DEBIAN_SUITE: "bookworm"
+        UID: "${UID:-1000}"
+        GID: "${GID:-1000}"
+    image: flyby-dev:latest
+    container_name: flyby-dev
+    hostname: flyby-dev
+    working_dir: /workspace
+    volumes:
+      - ..:/workspace:cached
+      - flyby-cargo-cache:/usr/local/cargo
+    cap_add:
+      - NET_ADMIN
+      - BPF
+      - PERFMON
+    security_opt:
+      - seccomp:unconfined
+    stdin_open: true
+    tty: true
+    command: bash
+
+volumes:
+  flyby-cargo-cache:

@@ -1,0 +1,15 @@
+# Rust build artifacts
+/target
+**/target
+
+# mdBook rendered output
+/docs/book/
+
+# Editor / OS noise
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# Local prompt scratch space (kept out of the public repo)
+baoulo/prompts/

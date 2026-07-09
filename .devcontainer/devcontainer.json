@@ -1,0 +1,42 @@
+{
+  "name": "flyby-dev",
+  "build": {
+    "dockerfile": "../Dockerfile",
+    "args": {
+      "RUST_VERSION": "1.91.1",
+      "DEBIAN_SUITE": "bookworm",
+      "UID": "1000",
+      "GID": "1000"
+    }
+  },
+  "remoteUser": "flyby",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached",
+  "workspaceFolder": "/workspace",
+  "runArgs": [
+    "--cap-add=NET_ADMIN",
+    "--cap-add=BPF",
+    "--cap-add=PERFMON",
+    "--security-opt=seccomp=unconfined"
+  ],
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "rust-lang.rust-analyzer",
+        "tamasfe.even-better-toml",
+        "serayuzgur.crates",
+        "vadimcn.vscode-lldb",
+        "ms-azuretools.vscode-docker"
+      ],
+      "settings": {
+        "rust-analyzer.check.command": "clippy",
+        "rust-analyzer.check.allTargets": true,
+        "rust-analyzer.cargo.features": "all",
+        "editor.formatOnSave": true,
+        "[rust]": {
+          "editor.defaultFormatter": "rust-lang.rust-analyzer"
+        }
+      }
+    }
+  },
+  "postCreateCommand": "rustc --version && cargo --version && cargo fmt --all -- --check || true"
+}

@@ -1,0 +1,24 @@
+[package]
+name = "flyby-net"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+description = "Networking backends (AF_XDP, DPDK) for the FlyBy framework."
+
+[lib]
+name = "flyby_net"
+path = "src/lib.rs"
+
+[features]
+default = []
+# AF_XDP source via Linux eBPF / XSK. Linux-only.
+af_xdp = []
+# DPDK source. Requires an external DPDK installation.
+dpdk = []
+
+[dependencies]
+flyby-core = { workspace = true }

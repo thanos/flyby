@@ -1,0 +1,12 @@
+# Build context: only ship what the image needs to build the Rust workspace.
+# Keep the image small and reproducible by excluding host state and build
+# artifacts.
+
+.git
+.github
+**/target
+**/.idea
+**/.vscode
+**/.DS_Store
+baoulo
+docs/site
