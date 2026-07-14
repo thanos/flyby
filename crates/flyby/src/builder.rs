@@ -26,7 +26,7 @@
 //! real stages. Subsequent parts of the specification fill in the
 //! concrete source / sink / placement constructors.
 
-use crate::api::{Error, ErrorKind, Result};
+use crate::api::{Decoder, Error, ErrorKind, Result};
 
 /// The entry point for the FlyBy builder API.
 ///
@@ -47,6 +47,7 @@ impl FlyBy {
 /// pipeline is materialized by [`FlyByBuilder::run`].
 #[derive(Debug, Default)]
 pub struct FlyByBuilder {
+    has_decoder: bool,
     use_memory: bool,
     use_af_xdp: bool,
     use_dpdk: bool,
@@ -62,6 +63,23 @@ impl FlyByBuilder {
     /// simulator parts of the specification. Kept here so the builder
     /// chain in the documentation compiles today.
     pub fn source(self) -> Self {
+        self
+    }
+
+    /// Pair a decoder with the source.
+    ///
+    /// The decoder is the only place in the pipeline where
+    /// supplier-specific wire-format knowledge lives. Every downstream
+    /// stage (`PreProcessor`, `Placement`, `Sink`) will be generic over
+    /// `D::Output`.
+    ///
+    /// When the builder is fully realized (Part III+), the compiler will
+    /// enforce that `D::Output` matches the message type `M` passed to
+    /// [`FlyByBuilder::run`]. For now the decoder is accepted and its
+    /// presence recorded; wiring lands with the concrete stage
+    /// implementations.
+    pub fn decoder<D: Decoder>(mut self, _decoder: D) -> Self {
+        self.has_decoder = true;
         self
     }
 

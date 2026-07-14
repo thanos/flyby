@@ -44,6 +44,7 @@
 #![deny(missing_docs)]
 #![deny(rustdoc::broken_intra_doc_links)]
 
+pub mod decoder;
 pub mod error;
 pub mod lifecycle;
 pub mod message;
@@ -54,6 +55,7 @@ pub mod preprocessor;
 pub mod sink;
 pub mod source;
 
+pub use decoder::Decoder;
 pub use error::{Error, ErrorKind, Result};
 pub use lifecycle::Lifecycle;
 pub use message::{DefaultSchemaId, Message, Metadata, SchemaId, Timestamp};
@@ -72,6 +74,7 @@ pub use source::Source;
 /// use flyby_core::prelude::*;
 /// ```
 pub mod prelude {
+    pub use crate::decoder::Decoder;
     pub use crate::error::{Error, Result};
     pub use crate::lifecycle::Lifecycle;
     pub use crate::message::{DefaultSchemaId, Message, Metadata, SchemaId, Timestamp};

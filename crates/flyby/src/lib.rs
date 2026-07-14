@@ -37,9 +37,9 @@ pub use flyby_core as core;
 /// Core traits, errors, and lifecycle.
 pub mod api {
     pub use flyby_core::{
-        DefaultSchemaId, Error, ErrorKind, Lifecycle, Message, Metadata, MetricKey, MetricKind,
-        MetricsCollector, NullCollector, Pipeline, Placement, PreProcessor, Result, SchemaId, Sink,
-        SinkId, Source, Timestamp,
+        Decoder, DefaultSchemaId, Error, ErrorKind, Lifecycle, Message, Metadata, MetricKey,
+        MetricKind, MetricsCollector, NullCollector, Pipeline, Placement, PreProcessor, Result,
+        SchemaId, Sink, SinkId, Source, Timestamp,
     };
 }
 
