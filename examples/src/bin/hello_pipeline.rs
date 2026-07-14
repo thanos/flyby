@@ -50,6 +50,19 @@ impl Message for MarketTick {
     }
 }
 
+impl Encode for MarketTick {
+    fn encoded_len(&self) -> usize {
+        20 // seq(8) + price(8) + qty(4)
+    }
+
+    fn encode_into(&self, dst: &mut [u8]) -> Result<usize> {
+        dst[0..8].copy_from_slice(&self.sequence.to_be_bytes());
+        dst[8..16].copy_from_slice(&self.price.to_be_bytes());
+        dst[16..20].copy_from_slice(&self.quantity.to_be_bytes());
+        Ok(20)
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Supplier-defined decoder — knows the wire format, nothing else does.
 // ---------------------------------------------------------------------------

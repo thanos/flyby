@@ -17,6 +17,13 @@ use core::fmt;
 pub trait SchemaId: Copy + Eq + fmt::Debug + Send + Sync + 'static {
     /// A stable, human-readable name for the schema.
     fn name(&self) -> &'static str;
+
+    /// A compact numeric identifier used for on-wire and on-disk encoding.
+    ///
+    /// Must be unique within a deployed system. The value `0` is reserved
+    /// for "unknown / unset" by convention; concrete schemas should use
+    /// non-zero values.
+    fn id(&self) -> u16;
 }
 
 /// Default schema identifier backed by a u16 numeric id.
@@ -29,6 +36,10 @@ pub struct DefaultSchemaId(pub u16);
 impl SchemaId for DefaultSchemaId {
     fn name(&self) -> &'static str {
         "default"
+    }
+
+    fn id(&self) -> u16 {
+        self.0
     }
 }
 

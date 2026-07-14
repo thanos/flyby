@@ -45,6 +45,7 @@
 #![deny(rustdoc::broken_intra_doc_links)]
 
 pub mod decoder;
+pub mod encoder;
 pub mod error;
 pub mod lifecycle;
 pub mod message;
@@ -56,6 +57,7 @@ pub mod sink;
 pub mod source;
 
 pub use decoder::Decoder;
+pub use encoder::Encode;
 pub use error::{Error, ErrorKind, Result};
 pub use lifecycle::Lifecycle;
 pub use message::{DefaultSchemaId, Message, Metadata, SchemaId, Timestamp};
@@ -75,6 +77,7 @@ pub use source::Source;
 /// ```
 pub mod prelude {
     pub use crate::decoder::Decoder;
+    pub use crate::encoder::Encode;
     pub use crate::error::{Error, Result};
     pub use crate::lifecycle::Lifecycle;
     pub use crate::message::{DefaultSchemaId, Message, Metadata, SchemaId, Timestamp};
