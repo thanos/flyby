@@ -115,7 +115,12 @@ impl<M: Message + Encode> SharedMemorySink<M> {
     }
 }
 
-impl<M: Message + Encode> Lifecycle for SharedMemorySink<M> {}
+impl<M: Message + Encode> Lifecycle for SharedMemorySink<M> {
+    fn init(&mut self) -> Result<()> {
+        self.written = 0;
+        Ok(())
+    }
+}
 
 impl<M: Message + Encode> Sink for SharedMemorySink<M> {
     type Message = M;

@@ -15,10 +15,12 @@ path = "src/lib.rs"
 
 [features]
 default = []
+# Base networking feature: RawBatch, NetworkSource, SimulatedNetSource.
+net = []
 # AF_XDP source via Linux eBPF / XSK. Linux-only.
-af_xdp = []
+af_xdp = ["net"]
 # DPDK source. Requires an external DPDK installation.
-dpdk = []
+dpdk = ["net"]
 
 [dependencies]
 flyby-core = { workspace = true }

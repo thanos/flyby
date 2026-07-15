@@ -13,10 +13,13 @@ publish = false
 [dependencies]
 flyby = { workspace = true, features = ["memory"] }
 flyby-memory = { workspace = true }
+flyby-net = { workspace = true }
 flyby-core = { workspace = true }
+flyby-storage = { workspace = true }
 
 [dev-dependencies]
 criterion = { version = "0.5", default-features = false, features = ["cargo_bench_support"] }
+tempfile = "3"
 
 [features]
 default = []
@@ -32,3 +35,13 @@ path = "benches/builder.rs"
 name = "memory"
 harness = false
 path = "benches/memory.rs"
+
+[[bench]]
+name = "net"
+harness = false
+path = "benches/net.rs"
+
+[[bench]]
+name = "storage"
+harness = false
+path = "benches/storage.rs"
