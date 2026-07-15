@@ -33,6 +33,3 @@ It is the last stage, selected per message by [`Placement`].
 - Flush latency and buffering depth.
 - Error rate by kind.
 
-[`Sink`]: https://docs.rs/flyby-core/latest/flyby_core/trait.Sink.html
-[`Lifecycle`]: https://docs.rs/flyby-core/latest/flyby_core/trait.Lifecycle.html
-[`Placement`]: https://docs.rs/flyby-core/latest/flyby_core/trait.Placement.html

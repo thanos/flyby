@@ -22,3 +22,6 @@ spdk = []
 
 [dependencies]
 flyby-core = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3"

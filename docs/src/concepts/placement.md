@@ -30,8 +30,3 @@ Between [`PreProcessor`] and [`Sink`].
 - Per-sink fan-out distribution (counter by [`SinkId`]).
 - Drop rate.
 
-[`Placement`]: https://docs.rs/flyby-core/latest/flyby_core/trait.Placement.html
-[`SinkId`]: https://docs.rs/flyby-core/latest/flyby_core/struct.SinkId.html
-[`SinkId::NONE`]: https://docs.rs/flyby-core/latest/flyby_core/struct.SinkId.html#associatedconstant.NONE
-[`PreProcessor`]: https://docs.rs/flyby-core/latest/flyby_core/trait.PreProcessor.html
-[`Sink`]: https://docs.rs/flyby-core/latest/flyby_core/trait.Sink.html

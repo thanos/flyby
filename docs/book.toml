@@ -7,11 +7,12 @@ language = "en"
 src = "src"
 
 [rust]
-edition = "2024"
+# mdBook 0.4.40 only accepts 2015/2018/2021; crate code may use edition 2024.
+edition = "2021"
 
 [output.html]
-git-repository-url = "https://github.com/thanos/flyby"
-edit-url-template = "https://github.com/thanos/flyby/edit/main/docs/src/{path}"
+git-repository-url = "https://github.com/anomalyco/flyby"
+edit-url-template = "https://github.com/anomalyco/flyby/edit/main/docs/src/{path}"
 no-section-label = false
 
 [output.html.search]

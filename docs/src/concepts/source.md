@@ -36,5 +36,3 @@ It is the first stage. Its output feeds the parser / decode step.
 - Bytes per second and records per second.
 - Back-pressure stalls (time spent unable to push downstream).
 
-[`Source`]: https://docs.rs/flyby-core/latest/flyby_core/trait.Source.html
-[`Lifecycle`]: https://docs.rs/flyby-core/latest/flyby_core/trait.Lifecycle.html

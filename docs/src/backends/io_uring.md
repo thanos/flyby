@@ -1,34 +1,28 @@
 # io_uring backend
 
-`io_uring` is Linux's modern async I/O interface: a pair of shared
-ring buffers between userspace and the kernel for submitting and
-completing I/O without per-call syscalls.
+## Status
+
+**Stub.** The `IoUringSource` type compiles behind the `io_uring` feature
+and returns `ErrorKind::NotImplemented` until the binding lands
+(ADR-0005: file reader first).
+
+## Role
+
+io_uring is planned as a **storage source** (high-throughput file/NVMe
+ingest), not a sink. Durable write sinks may be added later as separate
+types.
 
 ## Why it exists
 
-For file-backed ingest and durable sinks, `io_uring` delivers high
-throughput and low syscall overhead, with batched submission and
-completion.
-
-## How it works
-
-The real binding arrives with Part V of the specification. It is
-Linux-only and gated behind the `io_uring` feature. All `unsafe` will
-be isolated with a safety comment per block.
-
-## Where it fits
-
-A `Sink` (durable writes) and potentially a `Source` (replay from
-file).
+Batch async I/O with low syscall overhead for sequential and random
+reads on modern Linux.
 
 ## When not to use it
 
-- On non-Linux platforms (use the portable file backend).
-- For tiny, synchronous writes where `std::fs` is simpler and the
-  syscall overhead is irrelevant.
+- Portable or early development: use `FileSource`.
+- Kernels older than 5.1, or non-Linux hosts.
 
 ## How to measure it
 
-- IOPS and bytes per second.
-- Submission / completion queue depth.
-- Completion latency (histogram) and `io_uring`-specific drops.
+- IOPS and bandwidth vs `FileSource`.
+- Completion latency histograms at various queue depths.

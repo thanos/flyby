@@ -1,49 +1,69 @@
-#![forbid(unsafe_code)]
-#![doc = include_str!("../docs/README.md")]
+//! Storage backends for the FlyBy framework.
 //!
-//! # flyby-storage
+//! Provides high-throughput ingest from persistent storage using the same
+//! programming model as the network subsystem:
 //!
-//! Storage backends for FlyBy: plain files, io_uring, and SPDK.
+//! ```text
+//! Storage → StorageSource → RawRecordBatch → Decoder → Typed Message → Sink
+//! ```
 //!
-//! The file backend is portable. The `io_uring` and `spdk` backends are
-//! Linux-specific and gated behind feature flags of the same name. They
-//! compile to a stub when their feature is disabled.
+//! ## Backends
 //!
-//! No `unsafe` lives in this crate yet. When the real backends land, all
-//! `unsafe` will be isolated in clearly marked modules with a
-//! safety-comment per block, per the project's design principles.
+//! | Backend | Feature flag | Status |
+//! |---|---|---|
+//! | [`FileSource`] | always available | implemented |
+//! | [`IoUringSource`][io_uring::IoUringSource] | `io_uring` | stub (ADR-0005) |
+//! | [`SpdkSource`][spdk::SpdkSource] | `spdk` | stub (ADR-0006) |
+//!
+//! ## Replay
+//!
+//! The [`ReplayEngine`] is backend-independent: it
+//! controls *when* records are released to the pipeline, not *how* they are
+//! read from storage.  Any backend can be combined with any replay mode.
+//!
+//! ## Framing
+//!
+//! Records are extracted from the raw byte stream by a [`Frame`]
+//! implementation.  Four built-in strategies are provided; custom framers are
+//! supported via [`framing::Custom`].
+//!
+//! ## Feature flags
+//!
+//! - `io_uring` — compile the io_uring backend (Linux ≥ 5.1).
+//! - `spdk` — compile the SPDK backend (requires an external SPDK installation).
+//!
+//! Neither flag enables the corresponding feature in production code today;
+//! both stubs return [`ErrorKind::NotImplemented`][flyby_core::ErrorKind::NotImplemented].
+//! The flags exist to keep the API surface stable as the backends are developed.
 
+#![forbid(unsafe_code)]
 #![deny(missing_docs)]
 #![deny(rustdoc::broken_intra_doc_links)]
 
-/// Portable file backend.
-///
-/// Always available. The real implementation (buffered writes, optional
-/// `mmap`, fsync policy) arrives with Part V.
-pub mod file {
-    /// Placeholder for the future file sink.
-    #[derive(Debug, Default)]
-    pub struct FileSink;
-}
+pub mod batch;
+pub mod config;
+pub mod file;
+pub mod framing;
+pub mod metrics;
+pub mod replay;
+pub mod source;
 
-/// io_uring backend.
-///
-/// Enabled by the `io_uring` feature. Currently a placeholder so the
-/// workspace compiles; the real io_uring binding arrives with Part V.
 #[cfg(feature = "io_uring")]
-pub mod io_uring {
-    /// Placeholder for the future io_uring sink.
-    #[derive(Debug, Default)]
-    pub struct IoUringSink;
-}
+pub mod io_uring;
 
-/// SPDK backend.
-///
-/// Enabled by the `spdk` feature. Currently a placeholder so the
-/// workspace compiles; the real SPDK binding arrives with Part V.
 #[cfg(feature = "spdk")]
-pub mod spdk {
-    /// Placeholder for the future SPDK sink.
-    #[derive(Debug, Default)]
-    pub struct SpdkSink;
-}
+pub mod spdk;
+
+// ---------------------------------------------------------------------------
+// Flat re-exports for the most commonly used types.
+// ---------------------------------------------------------------------------
+
+pub use batch::{RawRecordBatch, RecordMeta};
+pub use config::{EofPolicy, FileConfig, IoUringConfig, SpdkConfig};
+pub use file::FileSource;
+pub use framing::{
+    Custom as CustomFramer, Delimiter, FixedLength, Frame, LengthPrefixed, PrefixWidth,
+};
+pub use metrics::StorageMetricKey;
+pub use replay::{ReplayEngine, ReplayMode};
+pub use source::StorageSource;

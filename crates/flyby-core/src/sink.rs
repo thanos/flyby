@@ -11,9 +11,12 @@ use crate::{Lifecycle, Message, Result};
 ///
 /// Implementations are responsible for any serialization required before
 /// the message leaves the pipeline. Sinks must respect back-pressure:
-/// [`Sink::write`] may return [`crate::Error`] with
-/// [`crate::ErrorKind::Sink`] to signal that the pipeline should slow
-/// down.
+/// [`Sink::write`] may return [`crate::ErrorKind::BackPressure`] when the
+/// destination is temporarily full (retry), or [`crate::ErrorKind::Sink`]
+/// for hard failures.
+///
+/// [`Lifecycle::shutdown`] should flush buffered data unless the
+/// implementation documents otherwise.
 pub trait Sink: Lifecycle {
     /// The message type accepted by this sink.
     type Message: Message;

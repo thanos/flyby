@@ -14,9 +14,16 @@ preserving high performance, safety, and excellent documentation.
 
 ## Status
 
-Early-stage skeleton. The workspace, CI, dev container, documentation
-structure, and core trait model are in place. Concrete backend
-implementations arrive in subsequent parts of the specification.
+| Area | Status |
+|------|--------|
+| `flyby-core` traits / errors | Implemented (contract layer) |
+| Shared-memory SPSC sink | **Implemented** |
+| Network simulator | **Implemented** |
+| File source + framing + replay engine | **Implemented** |
+| Facade builder `.run()` | Skeleton (config validation) |
+| `SimplePipeline` | **Implemented** (source→decode→place→sink) |
+| Facade `run_demo()` | Builds `SimplePipeline` (sim → memory) |
+| AF_XDP / DPDK / io_uring / SPDK | Stubs (`NotImplemented`) |
 
 ## Workspace layout
 
@@ -27,11 +34,11 @@ flyby/
 │   ├── flyby/            # Public facade + builder
 │   ├── flyby-core/       # Traits, errors, lifecycle (platform independent)
 │   ├── flyby-memory/     # Shared-memory sink (default backend)
-│   ├── flyby-net/        # AF_XDP, DPDK
-│   └── flyby-storage/    # File, io_uring, SPDK
+│   ├── flyby-net/        # Simulator + AF_XDP/DPDK stubs
+│   └── flyby-storage/    # File source + io_uring/SPDK stubs
 ├── examples/             # Runnable examples
 ├── benches/              # Criterion benchmarks
-├── simulator/            # In-process simulator source
+├── simulator/            # Thin CLI marker (prefer flyby-net sim)
 ├── docs/                 # Project guide (mdBook) + ADRs
 ├── .github/workflows/    # CI: fmt, clippy, test, doc, mdbook
 ├── Dockerfile            # Linux dev container
@@ -59,14 +66,14 @@ cargo doc --workspace --no-deps
 | Feature      | Default | Backend                            |
 |--------------|---------|------------------------------------|
 | `memory`     | yes     | In-process shared-memory sink.     |
-| `af_xdp`     | no      | AF_XDP source (Linux eBPF / XSK).  |
-| `dpdk`       | no      | DPDK source.                       |
-| `io_uring`   | no      | io_uring storage backend.          |
-| `spdk`       | no      | SPDK storage backend.              |
-| `simulator`  | no      | In-process simulator source.       |
-| `benchmarks` | no      | Build the benchmark harnesses.     |
+| `af_xdp`     | no      | AF_XDP source stub (Linux).        |
+| `dpdk`       | no      | DPDK source stub.                  |
+| `io_uring`   | no      | io_uring storage stub.             |
+| `spdk`       | no      | SPDK storage stub.                 |
+| `simulator`  | no      | Builder selector for net simulator.|
+| `benchmarks` | no      | Reserved (benches package always builds). |
 
-Heavy dependencies are never enabled by default.
+Portable file + net-sim APIs always compile. Heavy stubs are opt-in.
 
 ## Developer container
 

@@ -43,6 +43,3 @@ sinks write it.
 - Decode error rate (counter, by [`SchemaId`]).
 - End-to-end message residency time (timestamp at source vs. sink).
 
-[`SchemaId`]: https://docs.rs/flyby-core/latest/flyby_core/trait.SchemaId.html
-[`Timestamp`]: https://docs.rs/flyby-core/latest/flyby_core/struct.Timestamp.html
-[`Metadata`]: https://docs.rs/flyby-core/latest/flyby_core/struct.Metadata.html

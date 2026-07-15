@@ -34,5 +34,3 @@ Between the parser and [`Placement`].
 - Drop rate (counter).
 - CPU cost relative to decode and write.
 
-[`PreProcessor`]: https://docs.rs/flyby-core/latest/flyby_core/trait.PreProcessor.html
-[`Placement`]: https://docs.rs/flyby-core/latest/flyby_core/trait.Placement.html

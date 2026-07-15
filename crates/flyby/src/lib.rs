@@ -20,14 +20,15 @@
 //! | Feature       | Default | Description                                  |
 //! |---------------|---------|----------------------------------------------|
 //! | `memory`      | yes     | In-process shared-memory sink.               |
-//! | `af_xdp`      | no      | AF_XDP source (Linux eBPF / XSK).            |
-//! | `dpdk`        | no      | DPDK source.                                 |
-//! | `io_uring`    | no      | io_uring storage backend.                    |
-//! | `spdk`        | no      | SPDK storage backend.                        |
-//! | `simulator`   | no      | In-process simulator source.                |
-//! | `benchmarks`  | no      | Build the benchmark harnesses.              |
+//! | `af_xdp`      | no      | AF_XDP source stub (Linux eBPF / XSK).       |
+//! | `dpdk`        | no      | DPDK source stub.                            |
+//! | `io_uring`    | no      | io_uring storage backend stub.               |
+//! | `spdk`        | no      | SPDK storage backend stub.                   |
+//! | `simulator`   | no      | Builder flag for the in-process net simulator. |
+//! | `benchmarks`  | no      | Reserved for optional bench wiring.          |
 //!
-//! Heavy dependencies are never enabled by default.
+//! Portable APIs (`flyby-net` simulator, `flyby-storage` file source) always
+//! compile as dependencies of this facade. Heavy stubs are feature-gated.
 
 #![deny(missing_docs)]
 #![deny(rustdoc::broken_intra_doc_links)]
@@ -37,42 +38,41 @@ pub use flyby_core as core;
 /// Core traits, errors, and lifecycle.
 pub mod api {
     pub use flyby_core::{
-        Decoder, DefaultSchemaId, Error, ErrorKind, Lifecycle, Message, Metadata, MetricKey,
-        MetricKind, MetricsCollector, NullCollector, Pipeline, Placement, PreProcessor, Result,
-        SchemaId, Sink, SinkId, Source, Timestamp,
+        CountingCollector, Decoder, DefaultSchemaId, Encode, Error, ErrorKind, Lifecycle, Message,
+        Metadata, MetricKey, MetricKind, MetricsCollector, NullCollector, Pipeline, Placement,
+        PreProcessor, Result, SchemaId, Sink, SinkId, Source, StepOutcome, Timestamp,
     };
 }
 
 /// The public prelude.
-///
-/// Import this to get the full stable API in one line:
-///
-/// ```rust
-/// use flyby::prelude::*;
-/// ```
 pub mod prelude {
     pub use crate::api::*;
     pub use crate::builder::{FlyBy, FlyByBuilder};
+    pub use crate::pipeline::{
+        DropAllPlacement, FixedPlacement, IdentityPreProcessor, NetworkBatchSource, RawBatchSource,
+        SimplePipeline, StorageBatchSource,
+    };
 }
 
 pub mod builder;
+pub mod pipeline;
 
-// --- Backend re-exports (gated by feature flags) ---------------------------
+// --- Backend re-exports ----------------------------------------------------
 
-/// Shared-memory sink.
+/// Shared-memory sink (default backend).
 #[cfg(feature = "memory")]
 pub mod memory {
     pub use flyby_memory::*;
 }
 
-/// Networking backends (AF_XDP, DPDK).
-#[cfg(any(feature = "af_xdp", feature = "dpdk"))]
+/// Networking backends: always re-exports the portable simulator and batch
+/// types; AF_XDP/DPDK appear when their features are enabled.
 pub mod net {
     pub use flyby_net::*;
 }
 
-/// Storage backends (io_uring, SPDK).
-#[cfg(any(feature = "io_uring", feature = "spdk"))]
+/// Storage backends: always re-exports the portable file source and framing;
+/// io_uring/SPDK appear when their features are enabled.
 pub mod storage {
     pub use flyby_storage::*;
 }

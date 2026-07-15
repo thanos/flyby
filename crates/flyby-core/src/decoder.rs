@@ -13,39 +13,31 @@
 //! (`PreProcessor<Message = M>`, `Placement<Message = M>`,
 //! `Sink<Message = M>`).
 //!
-//! ## Statefulness
+//! ## Input assumption
 //!
-//! Decoders should be stateless where possible. Stateful decoders
-//! (reassembly, decompression, multi-packet frames) carry their state
-//! explicitly in `self` and must document their invariants.
+//! `decode` receives one complete framed record. Framing (splitting a
+//! byte stream into records) is the source / framer's responsibility.
 //!
 //! ## Filtering
 //!
-//! Returning `Ok(None)` silently drops a frame. Use this for malformed
-//! packets, heartbeats, or any message the pipeline should not see.
-//! Returning `Err` signals a genuine decode failure and may trigger
-//! pipeline-level error handling.
+//! Returning `Ok(None)` drops a frame (malformed, filtered, or control).
+//! Returning `Err` signals a genuine decode failure.
 
 use crate::{Message, Result};
 
 /// Converts a raw byte slice produced by a [`crate::Source`] into a
 /// typed [`Message`].
 ///
-/// # Type parameter
-///
-/// `Output` is the concrete supplier message type. The framework never
-/// inspects its internal fields; all pipeline stages downstream of the
-/// decoder are generic over `Output`.
-pub trait Decoder {
+/// Decoders that live on a worker thread must be `Send + Sync`.
+pub trait Decoder: Send + Sync {
     /// The concrete message type this decoder produces.
     type Output: Message;
 
     /// Attempt to decode a raw byte slice into a typed message.
     ///
     /// - `Ok(Some(msg))` — a message was successfully decoded.
-    /// - `Ok(None)` — the frame should be silently dropped (malformed,
-    ///   filtered, or a protocol control frame the pipeline ignores).
-    /// - `Err(e)` — a genuine decode failure; the pipeline surfaces the
-    ///   error through its error-handling policy.
+    /// - `Ok(None)` — the frame should be dropped (malformed, filtered, or
+    ///   a protocol control frame the pipeline ignores).
+    /// - `Err(e)` — a genuine decode failure.
     fn decode(&mut self, raw: &[u8]) -> Result<Option<Self::Output>>;
 }

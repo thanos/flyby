@@ -25,13 +25,15 @@
 //! | Module      | Purpose                                                  |
 //! |-------------|----------------------------------------------------------|
 //! | [`message`]     | The [`Message`] trait: typed records flowing downstream. |
-//! | [`source`]      | The [`Source`] trait: producers of raw bytes / records.  |
+//! | [`source`]      | The [`Source`] trait: producers of raw bytes.            |
+//! | [`decoder`]     | The [`Decoder`] trait: bytes → typed messages.           |
+//! | [`encoder`]     | The [`Encode`] trait: messages → bytes.                  |
 //! | [`sink`]        | The [`Sink`] trait: terminal destinations.               |
 //! | [`preprocessor`]| The [`PreProcessor`] trait: enrichment / transform.      |
 //! | [`placement`]   | The [`Placement`] trait: routing decisions.              |
 //! | [`pipeline`]    | The [`Pipeline`] trait: wiring stages together.          |
 //! | [`metrics`]     | The [`MetricsCollector`] trait: observability.           |
-//! | [`lifecycle`]   | Lifecycle phases shared by all stages.                   |
+//! | [`lifecycle`]   | Lifecycle phases for resource-owning stages.             |
 //! | [`error`]       | Explicit, typed, contextual errors.                      |
 //!
 //! ## Design rules
@@ -45,6 +47,7 @@
 #![deny(rustdoc::broken_intra_doc_links)]
 
 pub mod decoder;
+pub mod encoder;
 pub mod error;
 pub mod lifecycle;
 pub mod message;
@@ -56,11 +59,12 @@ pub mod sink;
 pub mod source;
 
 pub use decoder::Decoder;
+pub use encoder::Encode;
 pub use error::{Error, ErrorKind, Result};
 pub use lifecycle::Lifecycle;
 pub use message::{DefaultSchemaId, Message, Metadata, SchemaId, Timestamp};
-pub use metrics::{MetricKey, MetricKind, MetricsCollector, NullCollector};
-pub use pipeline::Pipeline;
+pub use metrics::{CountingCollector, MetricKey, MetricKind, MetricsCollector, NullCollector};
+pub use pipeline::{Pipeline, StepOutcome};
 pub use placement::{Placement, SinkId};
 pub use preprocessor::PreProcessor;
 pub use sink::Sink;
@@ -75,11 +79,14 @@ pub use source::Source;
 /// ```
 pub mod prelude {
     pub use crate::decoder::Decoder;
+    pub use crate::encoder::Encode;
     pub use crate::error::{Error, Result};
     pub use crate::lifecycle::Lifecycle;
     pub use crate::message::{DefaultSchemaId, Message, Metadata, SchemaId, Timestamp};
-    pub use crate::metrics::{MetricKey, MetricKind, MetricsCollector, NullCollector};
-    pub use crate::pipeline::Pipeline;
+    pub use crate::metrics::{
+        CountingCollector, MetricKey, MetricKind, MetricsCollector, NullCollector,
+    };
+    pub use crate::pipeline::{Pipeline, StepOutcome};
     pub use crate::placement::{Placement, SinkId};
     pub use crate::preprocessor::PreProcessor;
     pub use crate::sink::Sink;
