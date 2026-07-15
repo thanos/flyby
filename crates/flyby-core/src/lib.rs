@@ -25,13 +25,15 @@
 //! | Module      | Purpose                                                  |
 //! |-------------|----------------------------------------------------------|
 //! | [`message`]     | The [`Message`] trait: typed records flowing downstream. |
-//! | [`source`]      | The [`Source`] trait: producers of raw bytes / records.  |
+//! | [`source`]      | The [`Source`] trait: producers of raw bytes.            |
+//! | [`decoder`]     | The [`Decoder`] trait: bytes → typed messages.           |
+//! | [`encoder`]     | The [`Encode`] trait: messages → bytes.                  |
 //! | [`sink`]        | The [`Sink`] trait: terminal destinations.               |
 //! | [`preprocessor`]| The [`PreProcessor`] trait: enrichment / transform.      |
 //! | [`placement`]   | The [`Placement`] trait: routing decisions.              |
 //! | [`pipeline`]    | The [`Pipeline`] trait: wiring stages together.          |
 //! | [`metrics`]     | The [`MetricsCollector`] trait: observability.           |
-//! | [`lifecycle`]   | Lifecycle phases shared by all stages.                   |
+//! | [`lifecycle`]   | Lifecycle phases for resource-owning stages.             |
 //! | [`error`]       | Explicit, typed, contextual errors.                      |
 //!
 //! ## Design rules
@@ -62,7 +64,7 @@ pub use error::{Error, ErrorKind, Result};
 pub use lifecycle::Lifecycle;
 pub use message::{DefaultSchemaId, Message, Metadata, SchemaId, Timestamp};
 pub use metrics::{MetricKey, MetricKind, MetricsCollector, NullCollector};
-pub use pipeline::Pipeline;
+pub use pipeline::{Pipeline, StepOutcome};
 pub use placement::{Placement, SinkId};
 pub use preprocessor::PreProcessor;
 pub use sink::Sink;
@@ -82,7 +84,7 @@ pub mod prelude {
     pub use crate::lifecycle::Lifecycle;
     pub use crate::message::{DefaultSchemaId, Message, Metadata, SchemaId, Timestamp};
     pub use crate::metrics::{MetricKey, MetricKind, MetricsCollector, NullCollector};
-    pub use crate::pipeline::Pipeline;
+    pub use crate::pipeline::{Pipeline, StepOutcome};
     pub use crate::placement::{Placement, SinkId};
     pub use crate::preprocessor::PreProcessor;
     pub use crate::sink::Sink;

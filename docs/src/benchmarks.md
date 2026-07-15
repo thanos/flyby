@@ -9,18 +9,16 @@ Every optimization must have a benchmark (design principle #4). The
 cargo bench -p flyby-benches
 ```
 
-The current harness measures the builder skeleton. Real pipeline,
-memory, and networking benchmarks arrive with their respective parts of
-the specification and are gated so they only run when the matching
-feature is enabled.
-
 ## Layout
 
 ```text
 benches/
 ├── Cargo.toml
 ├── benches/
-│   └── builder.rs        # builder construction + validation cost
+│   ├── builder.rs    # builder construction + validation cost
+│   ├── memory.rs     # shared-memory sink write/pop
+│   ├── net.rs        # SimulatedNetSource poll_batch
+│   └── storage.rs    # FileSource / framing paths
 └── src/
     └── lib.rs
 ```

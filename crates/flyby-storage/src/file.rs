@@ -1,10 +1,10 @@
 //! Sequential file backend.
 //!
 //! [`FileSource`] reads records from a local file using a configurable
-//! [`Frame`] strategy.  It is the simplest storage
-//! backend: no async I/O, no DMA, no ring buffers.  Its purpose is to
-//! validate the pipeline and replay engine before the io_uring and SPDK
-//! backends are introduced (ADR-0005).
+//! [`Frame`] strategy.  It is the simplest storage backend: no async I/O,
+//! no DMA, no ring buffers.  Its purpose is to validate the pipeline and
+//! replay engine before the io_uring and SPDK backends are introduced
+//! (ADR-0005).
 //!
 //! ## Read path
 //!
@@ -17,18 +17,32 @@
 //! the source reads another chunk from the file and retries until either the
 //! batch is full or EOF is reached.
 //!
+//! Incomplete trailing bytes at EOF (Stop policy) are discarded; they never
+//! become a record.
+//!
 //! ## Restart support
 //!
-//! When `EofPolicy::Loop` is set the source rewinds the file to offset 0 and
-//! continues from the beginning.  The loop counter increments with each rewind.
+//! When `EofPolicy::Loop` is set the source rewinds the file to offset 0,
+//! clears any partial buffer, and continues.  At most one rewind is
+//! performed per `poll_batch` call.  If a full pass yields zero complete
+//! records, the source returns a decode error instead of spinning.
 //!
-//! ## Metrics
+//! ## Follow policy
 //!
-//! See [`StorageMetricKey`][crate::metrics::StorageMetricKey] for the full
-//! set of metrics emitted by this source.
+//! `EofPolicy::Follow` returns an empty batch at EOF.  Sleeping for
+//! `poll_interval` is the **caller's** responsibility (the engine does not
+//! block).
+//!
+//! ## Config
+//!
+//! [`FileConfig::batch_size`] and [`FileConfig::max_record_size`] are used by
+//! [`FileConfig::new_batch`].  The source rejects framed records larger than
+//! the batch slot size.  Replay mode on the config is applied by a separate
+//! [`crate::replay::ReplayEngine`] adapter, not inside this source.
 
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
+use std::time::{Duration, Instant};
 
 use flyby_core::{Error, ErrorKind, Lifecycle, Result};
 
@@ -63,6 +77,10 @@ pub struct FileSource<F: Frame> {
     exhausted: bool,
     /// `true` after `init()`, `false` after `shutdown()`.
     initialized: bool,
+    /// Earliest time a Follow poll may return data again.
+    follow_next: Option<Instant>,
+    /// Complete records emitted since the last Loop rewind (or init).
+    records_since_rewind: u64,
 }
 
 impl<F: Frame> FileSource<F> {
@@ -81,7 +99,14 @@ impl<F: Frame> FileSource<F> {
             loop_count: 0,
             exhausted: false,
             initialized: false,
+            follow_next: None,
+            records_since_rewind: 0,
         }
+    }
+
+    /// Borrow the file configuration.
+    pub fn config(&self) -> &FileConfig {
+        &self.config
     }
 
     /// Total bytes read from the underlying file.
@@ -105,7 +130,7 @@ impl<F: Frame> FileSource<F> {
         let file = self
             .file
             .as_mut()
-            .ok_or_else(|| Error::new(ErrorKind::Lifecycle, "FileSource: not initialized"))?;
+            .ok_or_else(|| Error::lifecycle("FileSource: not initialized"))?;
 
         let prev_len = self.read_buf.len();
         self.read_buf.resize(prev_len + READ_CHUNK, 0);
@@ -118,49 +143,103 @@ impl<F: Frame> FileSource<F> {
     // Handle EOF according to the configured policy.
     // Returns Ok(true) if the source should continue reading (Loop policy),
     // Ok(false) if the batch is done for this poll.
-    fn handle_eof(&mut self) -> Result<bool> {
+    fn handle_eof(&mut self, rewound_this_poll: &mut bool) -> Result<bool> {
         match &self.config.eof_policy {
             EofPolicy::Stop => {
+                // Incomplete trailing bytes are discarded by design.
+                self.read_buf.clear();
                 self.exhausted = true;
                 Ok(false)
             }
             EofPolicy::Loop => {
-                let file = self.file.as_mut().ok_or_else(|| {
-                    Error::new(ErrorKind::Lifecycle, "FileSource: not initialized")
-                })?;
+                if *rewound_this_poll {
+                    // Already rewound once this poll; stop to avoid spinning.
+                    return Ok(false);
+                }
+                if self.records_since_rewind == 0 && self.read_buf.is_empty() {
+                    return Err(Error::new(
+                        ErrorKind::Decode,
+                        "FileSource: EofPolicy::Loop with no complete records in file",
+                    ));
+                }
+                if self.records_since_rewind == 0 {
+                    return Err(Error::new(
+                        ErrorKind::Decode,
+                        "FileSource: EofPolicy::Loop cannot frame any complete record \
+                         (file shorter than one frame or missing delimiter)",
+                    ));
+                }
+                let file = self
+                    .file
+                    .as_mut()
+                    .ok_or_else(|| Error::lifecycle("FileSource: not initialized"))?;
+                // Drop partial trailing data so the next pass starts clean.
+                self.read_buf.clear();
                 file.seek(SeekFrom::Start(0))?;
                 self.buf_file_offset = 0;
                 self.loop_count += 1;
+                self.records_since_rewind = 0;
+                *rewound_this_poll = true;
                 Ok(true)
             }
-            EofPolicy::Follow { .. } => {
-                // Caller will retry on the next poll; nothing to do here.
+            EofPolicy::Follow { poll_interval } => {
+                let interval = *poll_interval;
+                // Incomplete buffer is retained so Follow can complete a
+                // partial record when more data appears.
+                self.follow_next = Some(Instant::now() + interval);
                 Ok(false)
             }
         }
     }
 
-    // Consume one complete record from the front of `read_buf`, push it into
-    // `batch`, and slide `read_buf` forward.
-    fn consume_record(&mut self, len: usize, batch: &mut RawRecordBatch) {
+    // Consume one complete record from the front of `read_buf`.
+    fn consume_record(&mut self, len: usize, batch: &mut RawRecordBatch) -> Result<()> {
+        if len == 0 {
+            return Err(Error::new(
+                ErrorKind::Decode,
+                "framing: zero-length record is not allowed",
+            ));
+        }
+        if len > self.read_buf.len() {
+            return Err(Error::new(
+                ErrorKind::Decode,
+                format!(
+                    "framing: record length {len} exceeds buffered bytes {}",
+                    self.read_buf.len()
+                ),
+            ));
+        }
+        if len > batch.max_record_size() {
+            return Err(Error::new(
+                ErrorKind::Decode,
+                format!(
+                    "record length {len} exceeds max_record_size {}",
+                    batch.max_record_size()
+                ),
+            ));
+        }
+
         let meta = RecordMeta {
             file_offset: self.buf_file_offset,
             timestamp_ns: 0, // file source does not embed timestamps
             record_index: self.record_index,
         };
-        batch.push(&self.read_buf[..len], meta);
+        batch.try_push(&self.read_buf[..len], meta)?;
         self.read_buf.drain(..len);
         self.buf_file_offset += len as u64;
         self.record_index += 1;
+        self.records_since_rewind += 1;
+        Ok(())
     }
 }
 
 impl<F: Frame> Lifecycle for FileSource<F> {
     fn init(&mut self) -> Result<()> {
         let file = File::open(&self.config.path).map_err(|e| {
-            Error::new(
+            Error::with_source(
                 ErrorKind::Io,
-                format!("FileSource: cannot open {:?}: {e}", self.config.path),
+                format!("FileSource: cannot open {:?}", self.config.path),
+                e,
             )
         })?;
         self.file = Some(file);
@@ -171,6 +250,8 @@ impl<F: Frame> Lifecycle for FileSource<F> {
         self.loop_count = 0;
         self.exhausted = false;
         self.initialized = true;
+        self.follow_next = None;
+        self.records_since_rewind = 0;
         Ok(())
     }
 
@@ -178,6 +259,7 @@ impl<F: Frame> Lifecycle for FileSource<F> {
         self.file = None;
         self.read_buf.clear();
         self.initialized = false;
+        self.follow_next = None;
         Ok(())
     }
 }
@@ -185,8 +267,7 @@ impl<F: Frame> Lifecycle for FileSource<F> {
 impl<F: Frame> StorageSource for FileSource<F> {
     fn poll_batch(&mut self, batch: &mut RawRecordBatch) -> Result<usize> {
         if !self.initialized {
-            return Err(Error::new(
-                ErrorKind::Lifecycle,
+            return Err(Error::lifecycle(
                 "FileSource: call init() before poll_batch()",
             ));
         }
@@ -194,7 +275,15 @@ impl<F: Frame> StorageSource for FileSource<F> {
             return Ok(0);
         }
 
+        if let Some(next) = self.follow_next {
+            if Instant::now() < next {
+                return Ok(0);
+            }
+            self.follow_next = None;
+        }
+
         let start_count = batch.len();
+        let mut rewound_this_poll = false;
 
         'outer: while batch.len() < batch.capacity() {
             // Try to frame a record from what's buffered.
@@ -204,7 +293,7 @@ impl<F: Frame> StorageSource for FileSource<F> {
                 }
                 match self.framer.next_record_len(&self.read_buf)? {
                     Some(len) => {
-                        self.consume_record(len, batch);
+                        self.consume_record(len, batch)?;
                         if batch.len() >= batch.capacity() {
                             break 'outer;
                         }
@@ -216,8 +305,7 @@ impl<F: Frame> StorageSource for FileSource<F> {
             // Need more data from the file.
             let got_data = self.fill_buf()?;
             if !got_data {
-                // EOF reached.
-                let should_continue = self.handle_eof()?;
+                let should_continue = self.handle_eof(&mut rewound_this_poll)?;
                 if !should_continue {
                     break;
                 }
@@ -234,6 +322,11 @@ impl<F: Frame> StorageSource for FileSource<F> {
     fn is_exhausted(&self) -> bool {
         self.exhausted
     }
+}
+
+/// Suggested Follow interval when constructing configs (callers still sleep).
+pub fn default_follow_interval() -> Duration {
+    Duration::from_millis(100)
 }
 
 #[cfg(test)]
@@ -317,6 +410,74 @@ mod tests {
     }
 
     #[test]
+    fn empty_file_loop_returns_error() {
+        let (_tmp, mut cfg) = write_temp(b"");
+        cfg.eof_policy = EofPolicy::Loop;
+        let mut src = FileSource::new(cfg, FixedLength::new(8));
+        src.init().unwrap();
+        let mut batch = RawRecordBatch::new(4, 64);
+        let err = src.poll_batch(&mut batch).unwrap_err();
+        assert_eq!(err.kind(), ErrorKind::Decode);
+    }
+
+    #[test]
+    fn partial_file_loop_returns_error() {
+        // 5 bytes cannot form an 8-byte fixed record.
+        let (_tmp, mut cfg) = write_temp(b"AAAAA");
+        cfg.eof_policy = EofPolicy::Loop;
+        let mut src = FileSource::new(cfg, FixedLength::new(8));
+        src.init().unwrap();
+        let mut batch = RawRecordBatch::new(4, 64);
+        let err = src.poll_batch(&mut batch).unwrap_err();
+        assert_eq!(err.kind(), ErrorKind::Decode);
+    }
+
+    #[test]
+    fn loop_does_not_splice_partial_tail() {
+        // 13 bytes = 1 full 8-byte record + 5 trailing bytes.
+        let data = b"AAAAAAAABBBBB";
+        let (_tmp, mut cfg) = write_temp(data);
+        cfg.eof_policy = EofPolicy::Loop;
+        let mut src = FileSource::new(cfg, FixedLength::new(8));
+        src.init().unwrap();
+
+        let mut batch = RawRecordBatch::new(3, 64);
+        let n = src.poll_batch(&mut batch).unwrap();
+        assert_eq!(n, 2);
+        let records: Vec<_> = batch.records().map(|(d, _)| d.to_vec()).collect();
+        assert_eq!(records[0], b"AAAAAAAA");
+        // Second record is a clean rewind of the first, not a splice of
+        // trailing BBBBB + AAAAAAA.
+        assert_eq!(records[1], b"AAAAAAAA");
+    }
+
+    #[test]
+    fn oversized_record_errors() {
+        let data = b"AAAAAAAA";
+        let (_tmp, cfg) = write_temp(data);
+        let mut src = FileSource::new(cfg, FixedLength::new(8));
+        src.init().unwrap();
+        let mut batch = RawRecordBatch::new(4, 4); // slot too small
+        let err = src.poll_batch(&mut batch).unwrap_err();
+        assert_eq!(err.kind(), ErrorKind::Decode);
+    }
+
+    #[test]
+    fn follow_returns_zero_at_eof() {
+        let (_tmp, mut cfg) = write_temp(b"AAAAAAAA");
+        cfg.eof_policy = EofPolicy::Follow {
+            poll_interval: Duration::from_secs(3600),
+        };
+        let mut src = FileSource::new(cfg, FixedLength::new(8));
+        src.init().unwrap();
+        let mut batch = RawRecordBatch::new(4, 64);
+        assert_eq!(src.poll_batch(&mut batch).unwrap(), 1);
+        batch.reset();
+        assert_eq!(src.poll_batch(&mut batch).unwrap(), 0);
+        assert!(!src.is_exhausted());
+    }
+
+    #[test]
     fn batch_size_limits_records_per_poll() {
         let mut data = Vec::new();
         for _ in 0..10 {
@@ -330,6 +491,24 @@ mod tests {
         let n = src.poll_batch(&mut batch).unwrap();
         assert_eq!(n, 4);
         assert!(!src.is_exhausted());
+    }
+
+    #[test]
+    fn config_new_batch_uses_config_sizes() {
+        let (_tmp, cfg) = write_temp(b"AAAAAAAABBBBBBBBCCCCCCCCDDDDDDDD");
+        assert_eq!(cfg.batch_size, 256);
+        let mut src = FileSource::new(cfg.clone(), FixedLength::new(8));
+        src.init().unwrap();
+        let batch = cfg.new_batch();
+        // Limit capacity for the test by using a small config clone.
+        let mut small = cfg.clone();
+        small.batch_size = 2;
+        small.max_record_size = 64;
+        let mut batch2 = small.new_batch();
+        let n = src.poll_batch(&mut batch2).unwrap();
+        assert_eq!(n, 2);
+        assert_eq!(batch.capacity(), 256);
+        assert_eq!(batch2.capacity(), 2);
     }
 
     #[test]

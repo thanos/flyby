@@ -47,7 +47,7 @@ pub enum BackpressurePolicy {
 /// All network backends — simulated, AF_XDP, DPDK, pcap replay — implement
 /// this trait. The pipeline calls [`poll_batch`][Self::poll_batch] in a
 /// tight loop. Back-pressure is reported via [`backpressure_policy`][Self::backpressure_policy]
-/// and tracked in [`RawBatch::dropped`].
+/// and tracked via [`RawBatch::record_drop`].
 pub trait NetworkSource: Lifecycle {
     /// Poll up to `batch.capacity()` packets into `batch`.
     ///

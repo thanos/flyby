@@ -1,7 +1,7 @@
 //! SPDK storage backend.
 //!
 //! Enabled by the `spdk` Cargo feature.  Currently a design stub — all
-//! methods return [`ErrorKind::FeatureNotEnabled`].
+//! methods return [`ErrorKind::NotImplemented`].
 //!
 //! ## SPDK primer
 //!
@@ -63,7 +63,7 @@ use crate::source::StorageSource;
 
 /// SPDK-backed storage source.
 ///
-/// All methods return [`ErrorKind::FeatureNotEnabled`] until the real SPDK
+/// All methods return [`ErrorKind::NotImplemented`] until the real SPDK
 /// binding is implemented.
 pub struct SpdkSource {
     #[allow(dead_code)]
@@ -80,8 +80,8 @@ impl SpdkSource {
 impl Lifecycle for SpdkSource {
     fn init(&mut self) -> Result<()> {
         Err(Error::new(
-            ErrorKind::FeatureNotEnabled,
-            "SPDK backend: not yet implemented; enable io_uring first (ADR-0006)",
+            ErrorKind::NotImplemented,
+            "SPDK backend: not yet implemented (deferred after io_uring; see ADR-0006)",
         ))
     }
 
@@ -93,7 +93,7 @@ impl Lifecycle for SpdkSource {
 impl StorageSource for SpdkSource {
     fn poll_batch(&mut self, _batch: &mut RawRecordBatch) -> Result<usize> {
         Err(Error::new(
-            ErrorKind::FeatureNotEnabled,
+            ErrorKind::NotImplemented,
             "SPDK backend: not yet implemented",
         ))
     }
@@ -113,18 +113,18 @@ mod tests {
     use crate::batch::RawRecordBatch;
 
     #[test]
-    fn init_returns_feature_not_enabled() {
+    fn init_returns_not_implemented() {
         let mut src = SpdkSource::new(SpdkConfig::default());
         let err = src.init().unwrap_err();
-        assert_eq!(err.kind(), ErrorKind::FeatureNotEnabled);
+        assert_eq!(err.kind(), ErrorKind::NotImplemented);
     }
 
     #[test]
-    fn poll_returns_feature_not_enabled() {
+    fn poll_returns_not_implemented() {
         let mut src = SpdkSource::new(SpdkConfig::default());
         let mut batch = RawRecordBatch::new(4, 64);
         let err = src.poll_batch(&mut batch).unwrap_err();
-        assert_eq!(err.kind(), ErrorKind::FeatureNotEnabled);
+        assert_eq!(err.kind(), ErrorKind::NotImplemented);
     }
 
     #[test]

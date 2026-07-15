@@ -44,13 +44,23 @@ pub const FLAG_SUSPECT: u16 = 0x0002;
 /// given maximum payload length, rounded up to the next cache-line
 /// multiple.
 ///
-/// # Panics
+/// # Errors
 ///
-/// Panics in debug builds if the result would overflow `usize`. In
-/// practice the inputs are always small.
-pub const fn slot_size(max_payload: usize) -> usize {
+/// Returns [`ErrorKind::Config`] when the result would overflow `usize`.
+pub fn slot_size(max_payload: usize) -> Result<usize> {
+    let raw = HEADER_SIZE
+        .checked_add(max_payload)
+        .ok_or_else(|| Error::config("slot_size overflow: max_payload too large"))?;
+    let rounded = raw
+        .checked_add(CACHE_LINE - 1)
+        .ok_or_else(|| Error::config("slot_size overflow while aligning"))?
+        & !(CACHE_LINE - 1);
+    Ok(rounded)
+}
+
+/// Const helper for tests and static geometry (panics on overflow).
+pub const fn slot_size_const(max_payload: usize) -> usize {
     let raw = HEADER_SIZE + max_payload;
-    // round up to the next multiple of CACHE_LINE
     (raw + CACHE_LINE - 1) & !(CACHE_LINE - 1)
 }
 
@@ -204,11 +214,12 @@ mod tests {
 
     #[test]
     fn slot_size_rounds_to_cache_line() {
-        assert_eq!(slot_size(0), CACHE_LINE); // 32 header → rounds to 64
-        assert_eq!(slot_size(32), CACHE_LINE); // 32+32=64 → stays 64
-        assert_eq!(slot_size(33), 2 * CACHE_LINE); // 32+33=65 → rounds to 128
-        assert_eq!(slot_size(96), 2 * CACHE_LINE); // 32+96=128 → stays 128
-        assert_eq!(slot_size(97), 3 * CACHE_LINE); // 32+97=129 → rounds to 192
+        assert_eq!(slot_size(0).unwrap(), CACHE_LINE);
+        assert_eq!(slot_size(32).unwrap(), CACHE_LINE);
+        assert_eq!(slot_size(33).unwrap(), 2 * CACHE_LINE);
+        assert_eq!(slot_size(96).unwrap(), 2 * CACHE_LINE);
+        assert_eq!(slot_size(97).unwrap(), 3 * CACHE_LINE);
+        assert_eq!(slot_size_const(33), 2 * CACHE_LINE);
     }
 
     #[test]
@@ -248,11 +259,11 @@ mod tests {
 
     #[test]
     fn decode_rejects_payload_overrun() {
-        let header = SlotHeader::new(1, FLAG_VALID, 0, 0, 100);
-        let mut buf = vec![0u8; HEADER_SIZE + 50]; // claim 100 but only have 50
+        // Encode a valid 50-byte payload, then corrupt payload_len to 100.
+        let header = SlotHeader::new(1, FLAG_VALID, 0, 0, 50);
+        let mut buf = vec![0u8; HEADER_SIZE + 50];
         encode(&header, &[0u8; 50], &mut buf).unwrap();
-        // Manually fix the payload_len to claim more than the buffer holds
-        let len_offset = 28usize; // offset of payload_len in SlotHeader
+        let len_offset = core::mem::offset_of!(SlotHeader, payload_len);
         buf[len_offset..len_offset + 4].copy_from_slice(&100u32.to_ne_bytes());
         assert!(decode(&buf).is_err());
     }

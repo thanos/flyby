@@ -26,9 +26,10 @@
 
 /// AF_XDP copy/zero-copy operating mode.
 ///
-/// Always set this explicitly. When `Auto` is selected the driver falls
-/// back to copy mode if zero-copy is unavailable — logs and metrics will
-/// report which mode was actually chosen.
+/// Always set this explicitly. When `Auto` is selected the driver tries
+/// zero-copy and falls back to copy when unavailable. Silent downgrade is
+/// not acceptable: the active mode **must** be logged and emitted as a
+/// metric (ADR-0004).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum XdpMode {
     /// The kernel copies each packet from the NIC ring into UMEM.
@@ -40,8 +41,7 @@ pub enum XdpMode {
     /// NIC driver and correct queue setup. Benchmark before claiming
     /// any performance advantage over copy mode.
     ZeroCopy,
-    /// Try zero-copy; fall back to copy silently.
-    /// **Always check logs/metrics to confirm which mode is active.**
+    /// Try zero-copy; fall back to copy with mandatory log + metric.
     Auto,
 }
 
@@ -166,13 +166,17 @@ impl Default for AfXdpConfig {
 ///
 /// Useful for developing parsers, placement logic, and sinks without
 /// real hardware. The simulator generates Ethernet/IP/UDP shaped packets.
+///
+/// Call [`SimNetConfig::validate`] before use (also invoked by
+/// [`crate::sim::SimulatedNetSource::try_new`] and `init`).
 #[derive(Debug, Clone)]
 pub struct SimNetConfig {
     /// Payload bytes appended after the UDP header.
     /// Default: 8 bytes (a u64 sequence number, big-endian).
     pub payload_size: usize,
-    /// Packets to return per [`poll_batch`][crate::source::NetworkSource::poll_batch]
-    /// call. Simulates burst behaviour.
+    /// Packets to attempt per [`poll_batch`][crate::source::NetworkSource::poll_batch]
+    /// call. Must be > 0. When larger than the batch capacity, excess is
+    /// counted as drops.
     pub batch_size: usize,
     /// Fraction of polls that return zero packets (simulate idle NIC).
     /// Must be in `[0.0, 1.0)`.
@@ -193,6 +197,66 @@ impl Default for SimNetConfig {
             drop_rate: 0.0,
             udp_dst_port: 9000,
         }
+    }
+}
+
+impl SimNetConfig {
+    /// Validate configuration constraints.
+    pub fn validate(&self) -> flyby_core::Result<()> {
+        if self.batch_size == 0 {
+            return Err(flyby_core::Error::config("batch_size must be > 0"));
+        }
+        if !(0.0..1.0).contains(&self.idle_rate) {
+            return Err(flyby_core::Error::config("idle_rate must be in [0.0, 1.0)"));
+        }
+        if !(0.0..1.0).contains(&self.drop_rate) {
+            return Err(flyby_core::Error::config("drop_rate must be in [0.0, 1.0)"));
+        }
+        Ok(())
+    }
+}
+
+impl UmemConfig {
+    /// Validate UMEM geometry.
+    pub fn validate(&self) -> flyby_core::Result<()> {
+        if self.frame_size == 0 || !self.frame_size.is_power_of_two() {
+            return Err(flyby_core::Error::config(
+                "umem frame_size must be a non-zero power of two",
+            ));
+        }
+        if self.frame_count == 0 || !self.frame_count.is_power_of_two() {
+            return Err(flyby_core::Error::config(
+                "umem frame_count must be a non-zero power of two",
+            ));
+        }
+        Ok(())
+    }
+}
+
+impl AfXdpConfig {
+    /// Validate AF_XDP configuration.
+    pub fn validate(&self) -> flyby_core::Result<()> {
+        if self.interface.is_empty() {
+            return Err(flyby_core::Error::config("interface must not be empty"));
+        }
+        if self.poll_budget == 0 {
+            return Err(flyby_core::Error::config("poll_budget must be > 0"));
+        }
+        self.umem.validate()?;
+        Ok(())
+    }
+}
+
+impl DpdkConfig {
+    /// Validate DPDK configuration.
+    pub fn validate(&self) -> flyby_core::Result<()> {
+        if self.pci_addr.is_empty() {
+            return Err(flyby_core::Error::config("pci_addr must not be empty"));
+        }
+        if self.burst_size == 0 {
+            return Err(flyby_core::Error::config("burst_size must be > 0"));
+        }
+        Ok(())
     }
 }
 

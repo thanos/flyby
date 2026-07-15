@@ -4,11 +4,11 @@
 //! schema identifier, a timestamp, optional metadata, and the typed
 //! payload itself.
 //!
-//! The framework targets fixed-width messages first; variable-length
-//! payloads will be introduced once the fixed-width path is measured and
-//! stable.
+//! Encoding/decoding live in separate traits ([`crate::Encode`],
+//! [`crate::Decoder`]); the message type may implement `Encode` when
+//! sinks need bytes.
 
-use core::fmt;
+use std::fmt;
 
 /// An opaque identifier for a message schema.
 ///
@@ -35,6 +35,7 @@ pub struct DefaultSchemaId(pub u16);
 
 impl SchemaId for DefaultSchemaId {
     fn name(&self) -> &'static str {
+        // Type-level name only; the numeric id distinguishes instances.
         "default"
     }
 
@@ -48,6 +49,7 @@ impl SchemaId for DefaultSchemaId {
 /// Stored as nanoseconds since the UNIX epoch to match the resolution of
 /// modern hardware timestamps. Sources that only have coarser clocks
 /// should zero-fill the low bits rather than lie about precision.
+/// Clock domain (hardware vs wall vs logical) is not encoded here.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Timestamp(pub u64);
 
@@ -58,7 +60,7 @@ impl Timestamp {
     }
 
     /// The raw nanosecond value.
-    pub const fn as_nanos(&self) -> u64 {
+    pub const fn as_nanos(self) -> u64 {
         self.0
     }
 }
@@ -72,7 +74,7 @@ impl Timestamp {
 pub struct Metadata {
     /// Monotonic sequence number assigned by the source.
     pub sequence: u64,
-    /// Non-zero when the source marks this message as suspect.
+    /// True when the source marks this message as suspect.
     pub suspect: bool,
 }
 
@@ -81,13 +83,16 @@ pub struct Metadata {
 /// Each message has:
 ///
 /// - a schema identifier ([`SchemaId`]),
-/// - a parser and encoder (provided by the concrete type, not the trait),
 /// - metadata ([`Metadata`]),
 /// - a timestamp ([`Timestamp`]),
 /// - optional user extensions (on the concrete type).
 ///
+/// Encoding is optional via [`crate::Encode`]. Decoding is performed by a
+/// separate [`crate::Decoder`] type.
+///
 /// Implementors should be cheap to move and `Send` so that messages can
-/// cross thread boundaries during placement.
+/// cross thread boundaries during placement. `Sync` is required when
+/// messages are shared across threads without exclusive ownership.
 pub trait Message: Send + Sync + 'static {
     /// The schema identifier type used by this message family.
     type Schema: SchemaId;

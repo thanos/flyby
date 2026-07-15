@@ -29,13 +29,14 @@ use flyby_core::{Error, Result};
 
 /// Determine where the next record ends in a byte buffer.
 ///
-/// Implementations must be stateless — the same buffer always produces the
-/// same result.  Stateful de-synchronisation recovery (e.g., scanning for a
-/// magic re-sync byte) must happen outside the framer.
+/// Built-in framers are effectively pure. Custom framers may be stateful
+/// (e.g. re-sync scanners). Zero-length records (`Some(0)`) are rejected by
+/// [`FileSource`][crate::file::FileSource]; framers must not return them.
 pub trait Frame: Send + Sync + 'static {
     /// Return the total byte length of the next record found in `buf`.
     ///
-    /// - `Ok(Some(n))` — the first `n` bytes form a complete record.
+    /// - `Ok(Some(n))` — the first `n` bytes form a complete record (`n > 0`
+    ///   and `n <= buf.len()`).
     /// - `Ok(None)` — more data is needed; retry after appending bytes.
     /// - `Err(_)` — the buffer is unrecoverable (corrupt framing header).
     fn next_record_len(&mut self, buf: &[u8]) -> Result<Option<usize>>;

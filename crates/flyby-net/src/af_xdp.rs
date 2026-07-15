@@ -49,8 +49,8 @@
 //!
 //! | Mode | NIC requirement | Kernel requirement | Status |
 //! |------|----------------|-------------------|--------|
-//! | Copy | any driver | ≥ 4.18 | v0.2 target |
-//! | Zero-copy | AF_XDP-capable driver | ≥ 5.4 | v0.3 target |
+//! | Copy | any driver | ≥ 5.4 | v0.2 target |
+//! | Zero-copy | AF_XDP-capable driver | ≥ 5.10 | v0.3 target |
 //!
 //! Always start with copy mode. Benchmark both before claiming any
 //! latency advantage.
@@ -61,8 +61,7 @@
 //! - Kernel ≥ 5.4 recommended (≥ 5.10 for production zero-copy).
 //! - `CAP_SYS_ADMIN` or (`CAP_BPF` + `CAP_NET_ADMIN`) to load the XDP program.
 //! - NIC driver with AF_XDP support (check with `ethtool --show-features`).
-//! - Setup scripts: `scripts/net/setup-afxdp-dev.sh`
-//!
+
 //! ## Status
 //!
 //! This is a **design stub**. The implementation requires a Linux host with
@@ -84,7 +83,7 @@ use crate::source::{BackpressurePolicy, NetworkSource};
 ///
 /// # Current status
 ///
-/// Stub. Returns [`ErrorKind::FeatureNotEnabled`] until the binding is
+/// Stub. Returns [`ErrorKind::NotImplemented`] until the binding is
 /// implemented. Enable the `af_xdp` feature flag to compile this type.
 pub struct AfXdpSource {
     config: AfXdpConfig,
@@ -105,9 +104,9 @@ impl AfXdpSource {
 impl Lifecycle for AfXdpSource {
     fn init(&mut self) -> Result<()> {
         Err(Error::new(
-            ErrorKind::FeatureNotEnabled,
+            ErrorKind::NotImplemented,
             "AF_XDP backend is not yet implemented. \
-             Enable the `af_xdp` feature and see crates/flyby-net/src/af_xdp.rs \
+             see crates/flyby-net/src/af_xdp.rs \
              for design documentation and operational requirements.",
         ))
     }
@@ -116,7 +115,7 @@ impl Lifecycle for AfXdpSource {
 impl Source for AfXdpSource {
     fn poll(&mut self) -> Result<Option<&[u8]>> {
         Err(Error::new(
-            ErrorKind::FeatureNotEnabled,
+            ErrorKind::NotImplemented,
             "AF_XDP backend is not yet implemented",
         ))
     }
@@ -125,7 +124,7 @@ impl Source for AfXdpSource {
 impl NetworkSource for AfXdpSource {
     fn poll_batch(&mut self, _batch: &mut RawBatch) -> Result<usize> {
         Err(Error::new(
-            ErrorKind::FeatureNotEnabled,
+            ErrorKind::NotImplemented,
             "AF_XDP backend is not yet implemented",
         ))
     }
@@ -144,10 +143,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn init_returns_feature_not_enabled() {
+    fn init_returns_not_implemented() {
         let mut src = AfXdpSource::new(AfXdpConfig::default());
         let err = src.init().unwrap_err();
-        assert_eq!(err.kind(), ErrorKind::FeatureNotEnabled);
+        assert_eq!(err.kind(), ErrorKind::NotImplemented);
     }
 
     #[test]

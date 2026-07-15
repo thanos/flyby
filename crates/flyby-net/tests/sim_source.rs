@@ -195,7 +195,7 @@ fn nonzero_drop_rate_produces_drops_over_many_polls() {
         n < 64,
         "90% drop rate should produce fewer than 64 packets, got {n}"
     );
-    assert!(batch.dropped > 0, "dropped counter should be non-zero");
+    assert!(batch.dropped() > 0, "dropped counter should be non-zero");
 }
 
 #[test]

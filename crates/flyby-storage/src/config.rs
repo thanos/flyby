@@ -34,21 +34,55 @@ pub struct FileConfig {
 
     /// Maximum number of records per batch.
     ///
+    /// Used by [`FileConfig::new_batch`]. Callers that construct
+    /// [`crate::batch::RawRecordBatch`] manually must use the same capacity.
+    ///
     /// Default: 256.
     pub batch_size: usize,
 
     /// Maximum byte length of a single record, including any framing header.
     ///
-    /// The read buffer is sized to `batch_size × max_record_size`.
+    /// Used as the per-slot size in [`FileConfig::new_batch`]. Oversized
+    /// framed records are rejected (not truncated).
     ///
     /// Default: 4096.
     pub max_record_size: usize,
 
-    /// Replay mode.  Default: [`ReplayMode::FullSpeed`].
+    /// Preferred replay mode for adapters that wrap this source.
+    ///
+    /// [`crate::file::FileSource`] itself does not apply timing; use
+    /// [`crate::replay::ReplayEngine`] (or a future replaying adapter).
+    /// Default: [`ReplayMode::FullSpeed`].
     pub replay: ReplayMode,
 
     /// What to do when EOF is reached.
+    ///
+    /// For [`EofPolicy::Follow`], sleeping for `poll_interval` is the
+    /// caller's job; the source only returns empty batches until the
+    /// interval elapses (tracked internally for successive polls).
     pub eof_policy: EofPolicy,
+}
+
+impl FileConfig {
+    /// Allocate a [`crate::batch::RawRecordBatch`] using this config's
+    /// `batch_size` and `max_record_size`.
+    pub fn new_batch(&self) -> crate::batch::RawRecordBatch {
+        crate::batch::RawRecordBatch::new(self.batch_size.max(1), self.max_record_size.max(1))
+    }
+
+    /// Validate configuration values.
+    pub fn validate(&self) -> flyby_core::Result<()> {
+        if self.batch_size == 0 {
+            return Err(flyby_core::Error::config("batch_size must be > 0"));
+        }
+        if self.max_record_size == 0 {
+            return Err(flyby_core::Error::config("max_record_size must be > 0"));
+        }
+        if self.path.as_os_str().is_empty() {
+            return Err(flyby_core::Error::config("path must not be empty"));
+        }
+        Ok(())
+    }
 }
 
 impl Default for FileConfig {

@@ -1,4 +1,7 @@
 # flyby-core
 
-Platform-independent core of the FlyBy framework: the traits, errors,
-and lifecycle that every backend must implement.
+Platform-independent contract layer: traits (`Source`, `Sink`, `Decoder`,
+`Encode`, `Pipeline`, …), lifecycle, metrics, and errors.
+
+No backend code and no `unsafe`. Changes that alter public contracts
+require an ADR.

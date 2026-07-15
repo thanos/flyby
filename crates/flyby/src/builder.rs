@@ -1,5 +1,15 @@
 //! The builder API for composing a FlyBy pipeline.
 //!
+//! ## Status
+//!
+//! The builder can validate feature selection and, when a decoder is
+//! provided with a concrete message type that implements
+//! [`Encode`](crate::api::Encode), can drive a minimal **demo pipeline**
+//! (simulated source → decode → shared memory sink) via
+//! [`FlyByBuilder::run_demo`]. The fluent [`.run`][FlyByBuilder::run]
+//! method remains a configuration skeleton for the full multi-stage
+//! wiring (placement, multiple sinks, real AF_XDP, …).
+//!
 //! Target style (from the specification):
 //!
 //! ```rust,no_run
@@ -14,23 +24,10 @@
 //!     Ok(())
 //! }
 //! ```
-//!
-//! Each backend selector (`.memory()`, `.af_xdp()`, `.dpdk()`,
-//! `.io_uring()`, `.spdk()`, `.simulator()`) is only available when the
-//! corresponding feature flag is enabled. Calling a selector that is not
-//! compiled in is a compile error with a clear "method not found"
-//! message, rather than a silent runtime no-op.
-//!
-//! The builder is a skeleton at this stage: it records the requested
-//! configuration and validates feature flags, but does not yet wire up
-//! real stages. Subsequent parts of the specification fill in the
-//! concrete source / sink / placement constructors.
 
 use crate::api::{Decoder, Error, ErrorKind, Result};
 
 /// The entry point for the FlyBy builder API.
-///
-/// Construct with [`FlyBy::builder`].
 #[derive(Debug, Default)]
 pub struct FlyBy;
 
@@ -42,12 +39,11 @@ impl FlyBy {
 }
 
 /// A fluent builder for a FlyBy pipeline.
-///
-/// Each method records intent and returns `self` for chaining. The
-/// pipeline is materialized by [`FlyByBuilder::run`].
 #[derive(Debug, Default)]
 pub struct FlyByBuilder {
+    has_source: bool,
     has_decoder: bool,
+    has_placement: bool,
     use_memory: bool,
     use_af_xdp: bool,
     use_dpdk: bool,
@@ -57,77 +53,57 @@ pub struct FlyByBuilder {
 }
 
 impl FlyByBuilder {
-    /// Placeholder for the source selector.
-    ///
-    /// The concrete source constructors arrive with the networking /
-    /// simulator parts of the specification. Kept here so the builder
-    /// chain in the documentation compiles today.
-    pub fn source(self) -> Self {
+    /// Mark that a source will be attached (placeholder for concrete sources).
+    pub fn source(mut self) -> Self {
+        self.has_source = true;
         self
     }
 
     /// Pair a decoder with the source.
     ///
-    /// The decoder is the only place in the pipeline where
-    /// supplier-specific wire-format knowledge lives. Every downstream
-    /// stage (`PreProcessor`, `Placement`, `Sink`) will be generic over
-    /// `D::Output`.
-    ///
-    /// When the builder is fully realized (Part III+), the compiler will
-    /// enforce that `D::Output` matches the message type `M` passed to
-    /// [`FlyByBuilder::run`]. For now the decoder is accepted and its
-    /// presence recorded; wiring lands with the concrete stage
-    /// implementations.
+    /// Presence is recorded for validation. Concrete decoder wiring for
+    /// [`.run`][Self::run] lands with full pipeline composition; use
+    /// [`run_demo`][Self::run_demo] for an end-to-end smoke path today.
     pub fn decoder<D: Decoder>(mut self, _decoder: D) -> Self {
         self.has_decoder = true;
         self
     }
 
-    /// Placeholder for the placement selector.
-    pub fn placement(self) -> Self {
+    /// Mark that placement will be attached (placeholder).
+    pub fn placement(mut self) -> Self {
+        self.has_placement = true;
         self
     }
 
     /// Select the shared-memory sink.
-    ///
-    /// Available only when the `memory` feature is enabled (it is on by
-    /// default).
     #[cfg(feature = "memory")]
     pub fn memory(mut self) -> Self {
         self.use_memory = true;
         self
     }
 
-    /// Select the AF_XDP source.
-    ///
-    /// Available only when the `af_xdp` feature is enabled.
+    /// Select the AF_XDP source (stub until implemented).
     #[cfg(feature = "af_xdp")]
     pub fn af_xdp(mut self) -> Self {
         self.use_af_xdp = true;
         self
     }
 
-    /// Select the DPDK source.
-    ///
-    /// Available only when the `dpdk` feature is enabled.
+    /// Select the DPDK source (stub until implemented).
     #[cfg(feature = "dpdk")]
     pub fn dpdk(mut self) -> Self {
         self.use_dpdk = true;
         self
     }
 
-    /// Select the io_uring storage backend.
-    ///
-    /// Available only when the `io_uring` feature is enabled.
+    /// Select the io_uring storage backend (stub until implemented).
     #[cfg(feature = "io_uring")]
     pub fn io_uring(mut self) -> Self {
         self.use_io_uring = true;
         self
     }
 
-    /// Select the SPDK storage backend.
-    ///
-    /// Available only when the `spdk` feature is enabled.
+    /// Select the SPDK storage backend (stub until implemented).
     #[cfg(feature = "spdk")]
     pub fn spdk(mut self) -> Self {
         self.use_spdk = true;
@@ -135,36 +111,117 @@ impl FlyByBuilder {
     }
 
     /// Select the in-process simulator source.
-    ///
-    /// Available only when the `simulator` feature is enabled.
     #[cfg(feature = "simulator")]
     pub fn simulator(mut self) -> Self {
         self.use_simulator = true;
         self
     }
 
-    /// Materialize and run the pipeline for the given message type.
+    fn has_any_backend(&self) -> bool {
+        self.use_memory
+            || self.use_af_xdp
+            || self.use_dpdk
+            || self.use_io_uring
+            || self.use_spdk
+            || self.use_simulator
+    }
+
+    /// Validate configuration without running stages.
     ///
-    /// This is a skeleton: it validates that at least one backend was
-    /// selected and then returns. Real wiring lands with the memory,
-    /// networking, and storage parts of the specification.
+    /// Requires at least one backend selector. Does not construct a live
+    /// pipeline; see [`run_demo`][Self::run_demo] for an executable path.
     pub fn run<M>(self) -> Result<()> {
-        if !self.use_memory
-            && !self.use_af_xdp
-            && !self.use_dpdk
-            && !self.use_io_uring
-            && !self.use_spdk
-            && !self.use_simulator
-        {
+        let _ = core::marker::PhantomData::<M>;
+        if !self.has_any_backend() {
             return Err(Error::new(
                 ErrorKind::Config,
                 "no sink or source selected; call at least one selector on the builder",
             ));
         }
-        // Real wiring happens in later parts of the specification.
-        // The type parameter is named so the public signature already
-        // matches the target style shown in the spec.
-        let _ = core::marker::PhantomData::<M>;
+        // Prefer coherent combinations: if only sources are selected without
+        // a sink, still accept for skeleton validation but warn via message
+        // when memory is available and unused — kept silent for now.
         Ok(())
+    }
+
+    /// Run a minimal end-to-end demo: simulated net source → decoder →
+    /// shared-memory sink for `steps` pipeline steps.
+    ///
+    /// Requires the `memory` feature. Uses [`flyby_net::SimulatedNetSource`]
+    /// with a small batch size. The decoder must produce `M` and `M` must
+    /// implement [`crate::api::Encode`].
+    #[cfg(feature = "memory")]
+    pub fn run_demo<M, D>(self, mut decoder: D, steps: usize) -> Result<u64>
+    where
+        M: crate::api::Message + crate::api::Encode,
+        D: Decoder<Output = M>,
+    {
+        use crate::api::{Lifecycle, Sink};
+        use flyby_memory::SharedMemorySink;
+        use flyby_net::{NetworkSource, RawBatch, SimNetConfig, SimulatedNetSource};
+
+        if !self.use_memory && !self.use_simulator && !self.has_source {
+            // Allow demo if memory is compiled; still require explicit intent.
+            return Err(Error::config(
+                "run_demo requires .memory() and a source (.source() or .simulator())",
+            ));
+        }
+        if !self.use_memory {
+            return Err(Error::config("run_demo requires .memory()"));
+        }
+
+        let mut src = SimulatedNetSource::try_new(SimNetConfig {
+            batch_size: 4,
+            payload_size: 32,
+            ..SimNetConfig::default()
+        })?;
+        src.init()?;
+
+        let mut sink: SharedMemorySink<M> = SharedMemorySink::new(256, 256)?;
+        sink.init()?;
+
+        let mut batch = RawBatch::new(8, 2048);
+        let mut written = 0u64;
+
+        for _ in 0..steps {
+            batch.reset(2048);
+            let n = src.poll_batch(&mut batch)?;
+            if n == 0 {
+                continue;
+            }
+            for (data, _meta) in batch.packets() {
+                // Demo path: if the decoder expects a custom wire format,
+                // callers supply it; for raw sim frames, many decoders will
+                // return Ok(None). We still exercise the source and sink.
+                if let Some(msg) = decoder.decode(data)? {
+                    match sink.write(&msg) {
+                        Ok(()) => written += 1,
+                        Err(e) if e.kind() == ErrorKind::BackPressure => break,
+                        Err(e) => return Err(e),
+                    }
+                }
+            }
+        }
+
+        sink.shutdown()?;
+        src.shutdown()?;
+        Ok(written)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn run_without_backend_errors() {
+        let err = FlyBy::builder().run::<()>().unwrap_err();
+        assert_eq!(err.kind(), ErrorKind::Config);
+    }
+
+    #[cfg(feature = "memory")]
+    #[test]
+    fn run_with_memory_ok() {
+        FlyBy::builder().memory().run::<()>().unwrap();
     }
 }

@@ -33,9 +33,3 @@ It is the top-level object the application holds and runs.
 - Back-pressure propagation time (source stall -> sink drain).
 - Per-stage counters surfaced through [`MetricsCollector`].
 
-[`Pipeline`]: https://docs.rs/flyby-core/latest/flyby_core/trait.Pipeline.html
-[`Source`]: https://docs.rs/flyby-core/latest/flyby_core/trait.Source.html
-[`PreProcessor`]: https://docs.rs/flyby-core/latest/flyby_core/trait.PreProcessor.html
-[`Placement`]: https://docs.rs/flyby-core/latest/flyby_core/trait.Placement.html
-[`Sink`]: https://docs.rs/flyby-core/latest/flyby_core/trait.Sink.html
-[`MetricsCollector`]: https://docs.rs/flyby-core/latest/flyby_core/trait.MetricsCollector.html

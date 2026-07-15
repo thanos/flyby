@@ -67,7 +67,7 @@
 //!
 //! ## Status
 //!
-//! Design placeholder. Returns [`flyby_core::ErrorKind::FeatureNotEnabled`].
+//! Design placeholder. Returns [`flyby_core::ErrorKind::NotImplemented`].
 //! The concrete FFI binding is a future deliverable after AF_XDP is stable.
 
 use flyby_core::{Error, ErrorKind, Lifecycle, Result, Source};
@@ -82,7 +82,7 @@ use crate::source::{BackpressurePolicy, NetworkSource};
 ///
 /// # Current status
 ///
-/// Placeholder. Returns [`ErrorKind::FeatureNotEnabled`] on all operations.
+/// Placeholder. Returns [`ErrorKind::NotImplemented`] on all operations.
 /// Enable the `dpdk` feature flag to compile this type.
 pub struct DpdkSource {
     config: DpdkConfig,
@@ -103,7 +103,7 @@ impl DpdkSource {
 impl Lifecycle for DpdkSource {
     fn init(&mut self) -> Result<()> {
         Err(Error::new(
-            ErrorKind::FeatureNotEnabled,
+            ErrorKind::NotImplemented,
             "DPDK backend is not yet implemented. \
              See ADR-002 (af_xdp before dpdk) and crates/flyby-net/src/dpdk.rs \
              for the design description and operational requirements.",
@@ -114,7 +114,7 @@ impl Lifecycle for DpdkSource {
 impl Source for DpdkSource {
     fn poll(&mut self) -> Result<Option<&[u8]>> {
         Err(Error::new(
-            ErrorKind::FeatureNotEnabled,
+            ErrorKind::NotImplemented,
             "DPDK backend is not yet implemented",
         ))
     }
@@ -123,7 +123,7 @@ impl Source for DpdkSource {
 impl NetworkSource for DpdkSource {
     fn poll_batch(&mut self, _batch: &mut RawBatch) -> Result<usize> {
         Err(Error::new(
-            ErrorKind::FeatureNotEnabled,
+            ErrorKind::NotImplemented,
             "DPDK backend is not yet implemented",
         ))
     }
@@ -142,10 +142,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn init_returns_feature_not_enabled() {
+    fn init_returns_not_implemented() {
         let mut src = DpdkSource::new(DpdkConfig::default());
         let err = src.init().unwrap_err();
-        assert_eq!(err.kind(), ErrorKind::FeatureNotEnabled);
+        assert_eq!(err.kind(), ErrorKind::NotImplemented);
     }
 
     #[test]

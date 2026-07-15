@@ -244,12 +244,18 @@ fn eof_loop_loop_count_tracks_rewinds() {
     let mut src = FileSource::new(cfg, FixedLength::new(8));
     src.init().unwrap();
 
-    // capacity=4: reads 1 record, loops to start, reads 1, loops, reads 1, loops, reads 1.
-    // That is 3 loops.
+    // At most one rewind per poll_batch (anti-spin).
+    // First poll: emit 1, rewind, emit 1 → loop_count=1.
     let mut batch = RawRecordBatch::new(4, 16);
     let n = src.poll_batch(&mut batch).unwrap();
-    assert_eq!(n, 4);
-    assert_eq!(src.loop_count(), 3);
+    assert_eq!(n, 2);
+    assert_eq!(src.loop_count(), 1);
+
+    // Second poll starts at EOF, rewinds once, emits 1 more.
+    batch.reset();
+    let n = src.poll_batch(&mut batch).unwrap();
+    assert_eq!(n, 1);
+    assert_eq!(src.loop_count(), 2);
 }
 
 // ---------------------------------------------------------------------------

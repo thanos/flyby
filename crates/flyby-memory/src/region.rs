@@ -185,8 +185,14 @@ impl Region {
         if slot_count == 0 || !slot_count.is_power_of_two() {
             return Err(Error::config("slot_count must be a non-zero power of two"));
         }
+        if slot_count > u32::MAX as usize {
+            return Err(Error::config("slot_count exceeds u32::MAX"));
+        }
         if slot_size < slot::HEADER_SIZE {
             return Err(Error::config("slot_size must be at least HEADER_SIZE (32)"));
+        }
+        if slot_size > u32::MAX as usize {
+            return Err(Error::config("slot_size exceeds u32::MAX"));
         }
         if slot_size % slot::CACHE_LINE != 0 {
             return Err(Error::config(
@@ -306,7 +312,7 @@ mod tests {
     use crate::slot::{self as s, FLAG_VALID, HEADER_SIZE, SlotHeader};
 
     fn default_region() -> Region {
-        Region::anonymous(8, s::slot_size(64)).unwrap()
+        Region::anonymous(8, s::slot_size(64).unwrap()).unwrap()
     }
 
     fn fill_slot(seq: u64) -> impl FnOnce(&mut [u8]) -> Result<()> {
@@ -370,7 +376,7 @@ mod tests {
 
     #[test]
     fn wrap_around_preserves_order() {
-        let mut region = Region::anonymous(4, s::slot_size(64)).unwrap();
+        let mut region = Region::anonymous(4, s::slot_size(64).unwrap()).unwrap();
         let mut results = Vec::new();
 
         for round in 0..3u64 {

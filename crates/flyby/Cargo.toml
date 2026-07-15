@@ -19,25 +19,20 @@ path = "src/lib.rs"
 default = ["memory"]
 
 # --- Backends ---------------------------------------------------------------
-# Shared-memory sink (in-process, dependency-light).
 memory = ["dep:flyby-memory"]
-# AF_XDP source (Linux eBPF / XSK).
 af_xdp = ["flyby-net/af_xdp"]
-# DPDK source.
 dpdk = ["flyby-net/dpdk"]
-# io_uring storage backend.
 io_uring = ["flyby-storage/io_uring"]
-# SPDK storage backend.
 spdk = ["flyby-storage/spdk"]
-# In-process simulator source.
+# Builder selector for SimulatedNetSource (always available via flyby::net).
 simulator = []
-# Build the benchmark harnesses. Heavy; never enabled by default.
+# Reserved; criterion benches live in the benches package.
 benchmarks = []
 
 [dependencies]
 flyby-core = { workspace = true }
 flyby-memory = { workspace = true, optional = true }
-flyby-net = { workspace = true, optional = false }
-flyby-storage = { workspace = true, optional = false }
+flyby-net = { workspace = true }
+flyby-storage = { workspace = true }
 
 [dev-dependencies]

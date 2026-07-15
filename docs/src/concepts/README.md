@@ -6,24 +6,22 @@ them.
 
 | Concept        | Trait                | Role                                            |
 |----------------|----------------------|-------------------------------------------------|
-| Message        | [`Message`]          | A typed record flowing downstream.              |
-| Source         | [`Source`]           | Produces raw bytes or pre-decoded records.      |
-| Sink           | [`Sink`]             | Terminal destination for decoded messages.      |
-| PreProcessor   | [`PreProcessor`]     | Enrichment / transform before routing.          |
-| Placement      | [`Placement`]        | Routes each message to a sink.                  |
-| Pipeline       | [`Pipeline`]         | Wires stages together and drives them.          |
-| Metrics        | [`MetricsCollector`] | Observability for every stage.                  |
+| Message        | `Message`            | A typed record flowing downstream.              |
+| Source         | `Source`             | Produces raw bytes (batch APIs live in backends). |
+| Decoder        | `Decoder`            | Bytes → typed message.                          |
+| Encode         | `Encode`             | Message → bytes (for byte sinks).               |
+| Sink           | `Sink`               | Terminal destination for decoded messages.      |
+| PreProcessor   | `PreProcessor`       | Enrichment / transform before routing.          |
+| Placement      | `Placement`          | Routes each message to a sink (1:1 today).      |
+| Pipeline       | `Pipeline`           | Wires stages together and drives them.          |
+| Metrics        | `MetricsCollector`   | Observability for stages.                       |
 
-All of them share the [`Lifecycle`] trait (`init` / `run` / `shutdown`).
+**Lifecycle** (`init` / `run` / `shutdown`) is shared by resource-owning
+stages: **Source, Sink, and Pipeline**. Pure transforms (PreProcessor,
+Placement, Decoder, Encode) and metrics collectors typically do not
+implement `Lifecycle`.
 
-These traits are expected to evolve, but changes require an
-[Architecture Decision Record](../adr/README.md).
+These traits evolve via [Architecture Decision Records](../adr/README.md).
 
-[`Message`]: https://docs.rs/flyby-core/latest/flyby_core/trait.Message.html
-[`Source`]: https://docs.rs/flyby-core/latest/flyby_core/trait.Source.html
-[`Sink`]: https://docs.rs/flyby-core/latest/flyby_core/trait.Sink.html
-[`PreProcessor`]: https://docs.rs/flyby-core/latest/flyby_core/trait.PreProcessor.html
-[`Placement`]: https://docs.rs/flyby-core/latest/flyby_core/trait.Placement.html
-[`Pipeline`]: https://docs.rs/flyby-core/latest/flyby_core/trait.Pipeline.html
-[`MetricsCollector`]: https://docs.rs/flyby-core/latest/flyby_core/trait.MetricsCollector.html
-[`Lifecycle`]: https://docs.rs/flyby-core/latest/flyby_core/trait.Lifecycle.html
+API reference: run `cargo doc -p flyby-core --open` (crates are not yet
+published to docs.rs).

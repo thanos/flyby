@@ -6,19 +6,15 @@
 //!
 //! ## Relationship to [`Source`][flyby_core::Source]
 //!
-//! [`Source`][flyby_core::Source] is the *typed* trait: it emits decoded
-//! [`Message`][flyby_core::Message] values.  `StorageSource` sits one layer
-//! below: it emits raw byte slices in a [`RawRecordBatch`] that the pipeline's
-//! decoder then parses into typed messages.  This separation keeps each layer
-//! independently testable.
+//! [`Source`][flyby_core::Source] is the core **raw-bytes** trait
+//! (`poll() -> Option<&[u8]>`). `StorageSource` is the batch-oriented
+//! storage surface: it fills a [`RawRecordBatch`] with framed raw records
+//! that a [`Decoder`][flyby_core::Decoder] later turns into typed messages.
+//! This separation keeps each layer independently testable.
 
 use flyby_core::{Lifecycle, Result};
 
 use crate::batch::RawRecordBatch;
-
-// ---------------------------------------------------------------------------
-// StorageSource trait
-// ---------------------------------------------------------------------------
 
 /// A batch-pull source backed by persistent storage.
 ///
@@ -27,11 +23,11 @@ use crate::batch::RawRecordBatch;
 pub trait StorageSource: Lifecycle {
     /// Fill `batch` with the next available records.
     ///
-    /// Returns the number of records written into `batch`.  Zero is a valid
-    /// return when no records are currently available (e.g. when
-    /// [`ReplayMode::OriginalTiming`][crate::replay::ReplayMode::OriginalTiming]
-    /// is holding back the next record, or when the source is at EOF and
-    /// [`EofPolicy::Follow`][crate::config::EofPolicy::Follow] is active).
+    /// Returns the number of records written into `batch`. Zero is valid
+    /// when no records are currently available (e.g. at EOF with
+    /// [`EofPolicy::Follow`][crate::config::EofPolicy::Follow], or when
+    /// a caller-side [`ReplayEngine`][crate::replay::ReplayEngine] holds
+    /// emission). This trait does not apply replay timing itself.
     ///
     /// `batch` must be [`reset`][RawRecordBatch::reset] by the caller before
     /// each call.

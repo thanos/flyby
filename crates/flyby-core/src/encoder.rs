@@ -14,35 +14,41 @@
 //!
 //! ## Symmetry with `Decoder`
 //!
-//! For any message `m` and a properly-sized buffer:
+//! For a message type that also has a paired `Decoder`, and for types
+//! that implement `PartialEq`:
 //!
 //! ```text
-//! decode(encode(m)) == Ok(Some(m))
+//! decoder.decode(encode(m)) == Ok(Some(m))
 //! ```
 //!
 //! This round-trip property is the recommended test for both impls.
+//!
+//! ## Buffer sizing
+//!
+//! Callers must not mutate the message between `encoded_len` and
+//! `encode_into`. Undersized buffers must return
+//! [`crate::ErrorKind::Encode`].
 
 use crate::Result;
 
 /// Serialises a typed message into a raw byte buffer.
 ///
 /// Implementations must be deterministic: the same message must always
-/// produce the same byte sequence.
+/// produce the same byte sequence. Not every [`crate::Message`] needs
+/// `Encode`; sinks that write bytes require both bounds.
 pub trait Encode {
-    /// The exact number of bytes that [`encode_into`][Self::encode_into]
-    /// will write.
+    /// The exact number of bytes that `encode_into` will write.
     ///
-    /// Callers use this to allocate or bounds-check the destination
-    /// before calling `encode_into`. The value must be stable for the
-    /// lifetime of `self`.
+    /// Must be stable for the lifetime of `self` (no mutation between
+    /// length query and encode).
     fn encoded_len(&self) -> usize;
 
     /// Serialise `self` into `dst`.
     ///
-    /// `dst` must be at least [`encoded_len`][Self::encoded_len] bytes.
+    /// `dst` must be at least `encoded_len()` bytes.
     /// Writes exactly `encoded_len()` bytes and returns that count.
     ///
-    /// Returns an error only if `dst` is too small or the message is in
-    /// an unrepresentable state.
+    /// Returns [`crate::ErrorKind::Encode`] if `dst` is too small or the
+    /// message is in an unrepresentable state.
     fn encode_into(&self, dst: &mut [u8]) -> Result<usize>;
 }

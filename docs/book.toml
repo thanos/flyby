@@ -10,8 +10,8 @@ src = "src"
 edition = "2024"
 
 [output.html]
-git-repository-url = "https://github.com/thanos/flyby"
-edit-url-template = "https://github.com/thanos/flyby/edit/main/docs/src/{path}"
+git-repository-url = "https://github.com/anomalyco/flyby"
+edit-url-template = "https://github.com/anomalyco/flyby/edit/main/docs/src/{path}"
 no-section-label = false
 
 [output.html.search]

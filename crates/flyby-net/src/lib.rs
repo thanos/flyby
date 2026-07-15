@@ -17,11 +17,12 @@
 //!
 //! | Feature | Enables |
 //! |---------|---------|
-//! | `net`   | [`NetworkSource`], [`RawBatch`], [`SimulatedNetSource`], config types |
-//! | `af_xdp` | [`AfXdpSource`] (implies `net`) |
-//! | `dpdk`  | [`DpdkSource`] (implies `net`) |
+//! | *(always)* | [`NetworkSource`], [`RawBatch`], [`SimulatedNetSource`], config types |
+//! | `net`   | Parent feature (no-op today; reserved for optional gating) |
+//! | `af_xdp` | [`AfXdpSource`] stub (implies `net`) |
+//! | `dpdk`  | [`DpdkSource`] stub (implies `net`) |
 //!
-//! Heavy dependencies (DPDK) are never enabled by default.
+//! Portable sim/batch types always compile. Heavy bindings are never default.
 //!
 //! ## Hardware requirements
 //!
@@ -33,8 +34,10 @@
 //!
 //! ## Backpressure
 //!
-//! Networking sources must never silently drop packets. All drops are
-//! tracked in [`RawBatch::dropped`] and exposed via [`NetMetricKey`].
+//! Networking sources must not drop packets without accounting. Drops are
+//! tracked via [`RawBatch::record_drop`] / [`RawBatch::dropped`] and should
+//! be exposed via [`NetMetricKey`]. Oversized frames may be truncated with
+//! [`PacketMeta::original_len`] preserved; prefer sizing slots correctly.
 
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
@@ -56,7 +59,7 @@ pub mod dpdk;
 // Flat re-exports for the common case: `use flyby_net::*`
 // ---------------------------------------------------------------------------
 
-pub use batch::{PacketMeta, RawBatch};
+pub use batch::{PacketMeta, PushResult, RawBatch};
 pub use config::{AfXdpConfig, DpdkConfig, SimNetConfig, UmemConfig, XdpConfig, XdpMode};
 pub use metrics::NetMetricKey;
 pub use sim::SimulatedNetSource;

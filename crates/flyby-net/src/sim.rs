@@ -6,8 +6,6 @@
 //!
 //! ## Packet format
 //!
-//! Each generated packet has the structure:
-//!
 //! ```text
 //! [Ethernet dst  6B][Ethernet src  6B][EtherType 2B = 0x0800]
 //! [IPv4 header  20B]
@@ -17,103 +15,99 @@
 //!
 //! Checksums are intentionally wrong (all zeros) — the simulator is for
 //! pipeline testing, not wire-compatible replay.
-//!
-//! ## Usage
-//!
-//! ```rust
-//! use flyby_net::{SimulatedNetSource, SimNetConfig, NetworkSource, RawBatch};
-//! use flyby_core::Lifecycle;
-//!
-//! let config = SimNetConfig { batch_size: 8, ..SimNetConfig::default() };
-//! let mut src = SimulatedNetSource::new(config);
-//! src.init().unwrap();
-//!
-//! let mut batch = RawBatch::new(32, 2048);
-//! let n = src.poll_batch(&mut batch).unwrap();
-//! assert_eq!(n, 8);
-//! ```
 
 use flyby_core::{Error, Lifecycle, Result, Source};
 
-use crate::batch::{PacketMeta, RawBatch};
+use crate::batch::{PacketMeta, PushResult, RawBatch};
 use crate::config::SimNetConfig;
 use crate::source::NetworkSource;
 
 // Fixed Ethernet/IP/UDP header sizes.
-const ETH_HEADER: usize = 14; // dst(6) + src(6) + ethertype(2)
-const IP_HEADER: usize = 20; // minimal IPv4, no options
-const UDP_HEADER: usize = 8; // src_port(2)+dst_port(2)+len(2)+checksum(2)
+const ETH_HEADER: usize = 14;
+const IP_HEADER: usize = 20;
+const UDP_HEADER: usize = 8;
 const NET_HEADER: usize = ETH_HEADER + IP_HEADER + UDP_HEADER;
 
+/// SplitMix64-style mix for deterministic pseudo-random decisions.
+fn mix64(mut z: u64) -> u64 {
+    z = z.wrapping_add(0x9E3779B97F4A7C15);
+    z = (z ^ (z >> 30)).wrapping_mul(0xBF58476D1CE4E5B9);
+    z = (z ^ (z >> 27)).wrapping_mul(0x94D049BB133111EB);
+    z ^ (z >> 31)
+}
+
 /// In-process simulated network source.
-///
-/// Generates synthetic packets at the configured rate. Drop rate and idle
-/// rate are configurable for testing back-pressure and drop-counting logic.
 pub struct SimulatedNetSource {
     config: SimNetConfig,
     sequence: u64,
+    /// Separate counter for idle/drop PRNG so decisions are not correlated
+    /// solely with the packet sequence on path 0.
+    rng_state: u64,
     /// Pre-built packet template; only the payload sequence number changes.
     template: Vec<u8>,
+    /// Single-packet buffer for the `Source::poll` shim.
+    poll_scratch: Vec<u8>,
     initialized: bool,
 }
 
 impl SimulatedNetSource {
     /// Construct a new simulator with the given configuration.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `config.validate()` fails. Prefer validating first in
+    /// library code that must return `Result`.
     pub fn new(config: SimNetConfig) -> Self {
+        config
+            .validate()
+            .expect("SimNetConfig::validate failed; fix config before constructing");
+        Self::new_unchecked(config)
+    }
+
+    /// Construct without validating (caller must have validated).
+    pub fn try_new(config: SimNetConfig) -> Result<Self> {
+        config.validate()?;
+        Ok(Self::new_unchecked(config))
+    }
+
+    fn new_unchecked(config: SimNetConfig) -> Self {
         let frame_size = NET_HEADER + config.payload_size;
         let mut template = vec![0u8; frame_size];
         Self::fill_static_headers(&mut template, config.udp_dst_port, frame_size);
         Self {
             config,
             sequence: 0,
+            rng_state: 0xC0FFEE_u64,
             template,
+            poll_scratch: Vec::new(),
             initialized: false,
         }
     }
 
-    /// Write the static header fields into the template buffer.
-    ///
-    /// Only fields that never change between packets are filled here.
-    /// The payload is patched per-packet in [`poll_batch`][Self::poll_batch].
     fn fill_static_headers(buf: &mut [u8], udp_dst_port: u16, frame_size: usize) {
-        // Ethernet header
-        // dst MAC: broadcast ff:ff:ff:ff:ff:ff
         buf[0..6].copy_from_slice(&[0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]);
-        // src MAC: 02:00:00:00:00:01 (locally administered)
         buf[6..12].copy_from_slice(&[0x02, 0x00, 0x00, 0x00, 0x00, 0x01]);
-        // EtherType: IPv4
         buf[12..14].copy_from_slice(&0x0800u16.to_be_bytes());
 
-        // IPv4 header (minimal, no options)
-        buf[14] = 0x45; // version=4, IHL=5
-        buf[15] = 0x00; // DSCP/ECN
+        buf[14] = 0x45;
+        buf[15] = 0x00;
         let total_len = (frame_size - ETH_HEADER) as u16;
         buf[16..18].copy_from_slice(&total_len.to_be_bytes());
-        // id=0, flags=0, frag_offset=0
         buf[18..20].copy_from_slice(&[0x00, 0x00]);
         buf[20..22].copy_from_slice(&[0x00, 0x00]);
-        buf[22] = 64; // TTL
-        buf[23] = 17; // proto = UDP
-        // checksum: 0 (intentionally invalid, simulator only)
+        buf[22] = 64;
+        buf[23] = 17;
         buf[24..26].copy_from_slice(&[0x00, 0x00]);
-        // src IP: 192.168.1.1
         buf[26..30].copy_from_slice(&[192, 168, 1, 1]);
-        // dst IP: 192.168.1.2
         buf[30..34].copy_from_slice(&[192, 168, 1, 2]);
 
-        // UDP header
-        // src port: 12345
         buf[34..36].copy_from_slice(&12345u16.to_be_bytes());
-        // dst port: configured
         buf[36..38].copy_from_slice(&udp_dst_port.to_be_bytes());
         let udp_len = (UDP_HEADER + (frame_size - NET_HEADER)) as u16;
         buf[38..40].copy_from_slice(&udp_len.to_be_bytes());
-        // checksum: 0 (intentionally invalid)
         buf[40..42].copy_from_slice(&[0x00, 0x00]);
-        // payload: zeroed (patched per-packet)
     }
 
-    /// Patch the sequence number into the payload area of `packet`.
     fn write_sequence(packet: &mut [u8], sequence: u64) {
         if packet.len() >= NET_HEADER + 8 {
             packet[NET_HEADER..NET_HEADER + 8].copy_from_slice(&sequence.to_be_bytes());
@@ -124,11 +118,35 @@ impl SimulatedNetSource {
     pub fn frame_size(&self) -> usize {
         NET_HEADER + self.config.payload_size
     }
+
+    fn next_u32(&mut self) -> u32 {
+        self.rng_state = mix64(self.rng_state);
+        (self.rng_state >> 32) as u32
+    }
+
+    fn rate_hit(&mut self, rate: f32) -> bool {
+        if rate <= 0.0 {
+            return false;
+        }
+        // Compare in u64 domain to avoid f32 precision issues with u32::MAX.
+        let threshold = (rate as f64 * (u32::MAX as f64 + 1.0)) as u64;
+        (self.next_u32() as u64) < threshold
+    }
+
+    fn ensure_init(&self) -> Result<()> {
+        if !self.initialized {
+            return Err(Error::lifecycle("SimulatedNetSource not initialised"));
+        }
+        Ok(())
+    }
 }
 
 impl Lifecycle for SimulatedNetSource {
     fn init(&mut self) -> Result<()> {
+        self.config.validate()?;
         self.initialized = true;
+        self.sequence = 0;
+        self.rng_state = 0xC0FFEE_u64;
         Ok(())
     }
 
@@ -139,57 +157,66 @@ impl Lifecycle for SimulatedNetSource {
 }
 
 impl Source for SimulatedNetSource {
-    /// Single-packet shim: returns the next packet from a one-packet
-    /// batch. Exists so `SimulatedNetSource` satisfies `flyby_core::Source`
-    /// for compatibility with the current pipeline skeleton.
-    ///
-    /// Prefer [`NetworkSource::poll_batch`] for production use.
+    /// Single-packet shim routed through the same idle/drop logic as
+    /// [`NetworkSource::poll_batch`] (one-slot batch).
     fn poll(&mut self) -> Result<Option<&[u8]>> {
-        if !self.initialized {
-            return Err(Error::source("SimulatedNetSource not initialised"));
+        self.ensure_init()?;
+        let mut batch = RawBatch::new(1, self.frame_size().max(1));
+        let n = self.poll_batch(&mut batch)?;
+        if n == 0 {
+            return Ok(None);
         }
-        Self::write_sequence(&mut self.template, self.sequence);
-        self.sequence = self.sequence.wrapping_add(1);
-        Ok(Some(&self.template))
+        let (data, _) = batch.packets().next().expect("n > 0");
+        self.poll_scratch.clear();
+        self.poll_scratch.extend_from_slice(data);
+        Ok(Some(&self.poll_scratch))
     }
 }
 
 impl NetworkSource for SimulatedNetSource {
     fn poll_batch(&mut self, batch: &mut RawBatch) -> Result<usize> {
-        if !self.initialized {
-            return Err(Error::source("SimulatedNetSource not initialised"));
-        }
+        self.ensure_init()?;
 
         batch.reset(self.frame_size());
 
-        // Simulate idle: return empty batch at the configured idle_rate.
-        // We use the sequence number as a deterministic pseudo-random
-        // input (fast, no RNG dependency).
-        let idle_threshold = (self.config.idle_rate * u32::MAX as f32) as u32;
-        let pseudo = ((self.sequence.wrapping_mul(6364136223846793005)) >> 32) as u32;
-        if self.config.idle_rate > 0.0 && pseudo < idle_threshold {
+        // Idle: empty batch at configured idle_rate (independent PRNG stream).
+        if self.rate_hit(self.config.idle_rate) {
             return Ok(0);
         }
 
-        let drop_threshold = (self.config.drop_rate * u32::MAX as f32) as u32;
-        let n = self.config.batch_size.min(batch.capacity());
+        let intended = self.config.batch_size;
+        let capacity = batch.capacity();
+        let mut produced = 0usize;
 
-        for _ in 0..n {
-            // Simulate NIC drop: count but skip this packet.
-            let pseudo = ((self.sequence.wrapping_mul(6364136223846793005)) >> 32) as u32;
-            if self.config.drop_rate > 0.0 && pseudo < drop_threshold {
-                batch.dropped += 1;
+        for _ in 0..intended {
+            if self.rate_hit(self.config.drop_rate) {
+                batch.record_drop();
+                self.sequence = self.sequence.wrapping_add(1);
+                continue;
+            }
+
+            if produced >= capacity {
+                // Cannot fit remaining intended packets — count as drops.
+                batch.record_drop();
                 self.sequence = self.sequence.wrapping_add(1);
                 continue;
             }
 
             Self::write_sequence(&mut self.template, self.sequence);
+            let frame_len = self.frame_size();
             let meta = PacketMeta {
-                timestamp_ns: self.sequence * 1_000, // synthetic nanoseconds
+                timestamp_ns: self.sequence.saturating_mul(1_000),
                 queue_id: 0,
-                original_len: self.frame_size() as u16,
+                original_len: frame_len.min(u32::MAX as usize) as u32,
             };
-            batch.push(&self.template, meta);
+            match batch.push(&self.template, meta) {
+                PushResult::Ok | PushResult::Truncated => {
+                    produced += 1;
+                }
+                PushResult::Full => {
+                    batch.record_drop();
+                }
+            }
             self.sequence = self.sequence.wrapping_add(1);
         }
 
@@ -204,7 +231,7 @@ impl NetworkSource for SimulatedNetSource {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use flyby_core::Lifecycle;
+    use flyby_core::{ErrorKind, Lifecycle};
 
     fn make_src() -> SimulatedNetSource {
         SimulatedNetSource::new(SimNetConfig::default())
@@ -257,10 +284,11 @@ mod tests {
     }
 
     #[test]
-    fn uninitialized_source_returns_error() {
+    fn uninitialized_source_returns_lifecycle_error() {
         let mut src = make_src();
         let mut batch = make_batch();
-        assert!(src.poll_batch(&mut batch).is_err());
+        let err = src.poll_batch(&mut batch).unwrap_err();
+        assert_eq!(err.kind(), ErrorKind::Lifecycle);
     }
 
     #[test]
@@ -283,10 +311,42 @@ mod tests {
         src.init().unwrap();
         let mut batch = RawBatch::new(64, 2048);
         src.poll_batch(&mut batch).unwrap();
-        // With 50% drop rate over 64 packets, we expect some drops.
-        // The exact number varies but should be > 0 and < 64.
-        assert!(batch.dropped > 0);
-        assert!(batch.len() + batch.dropped as usize <= 64);
+        assert!(batch.dropped() > 0);
+        assert!(batch.len() + batch.dropped() as usize <= 64);
+    }
+
+    #[test]
+    fn capacity_overflow_counts_drops() {
+        let config = SimNetConfig {
+            batch_size: 8,
+            drop_rate: 0.0,
+            idle_rate: 0.0,
+            ..SimNetConfig::default()
+        };
+        let mut src = SimulatedNetSource::new(config);
+        src.init().unwrap();
+        let mut batch = RawBatch::new(2, 2048);
+        let n = src.poll_batch(&mut batch).unwrap();
+        assert_eq!(n, 2);
+        assert_eq!(batch.dropped(), 6);
+    }
+
+    #[test]
+    fn source_poll_respects_idle() {
+        let config = SimNetConfig {
+            idle_rate: 0.999,
+            batch_size: 1,
+            ..SimNetConfig::default()
+        };
+        let mut src = SimulatedNetSource::new(config);
+        src.init().unwrap();
+        let mut idle = 0;
+        for _ in 0..50 {
+            if src.poll().unwrap().is_none() {
+                idle += 1;
+            }
+        }
+        assert!(idle > 0, "expected some idle polls, got {idle}");
     }
 
     #[test]
@@ -297,7 +357,7 @@ mod tests {
         src.poll_batch(&mut batch).unwrap();
         let (data, _) = batch.packets().next().unwrap();
         let ethertype = u16::from_be_bytes([data[12], data[13]]);
-        assert_eq!(ethertype, 0x0800, "EtherType must be IPv4 (0x0800)");
+        assert_eq!(ethertype, 0x0800);
     }
 
     #[test]
@@ -319,5 +379,14 @@ mod tests {
     fn backend_name() {
         let src = make_src();
         assert_eq!(src.backend_name(), "simulator");
+    }
+
+    #[test]
+    fn invalid_config_rejected() {
+        let cfg = SimNetConfig {
+            idle_rate: 1.5,
+            ..SimNetConfig::default()
+        };
+        assert!(SimulatedNetSource::try_new(cfg).is_err());
     }
 }

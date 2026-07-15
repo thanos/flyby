@@ -32,7 +32,3 @@ collector.
 - The collector itself should add negligible overhead; measure its cost
   against [`NullCollector`] as the baseline.
 
-[`MetricsCollector`]: https://docs.rs/flyby-core/latest/flyby_core/trait.MetricsCollector.html
-[`MetricKey`]: https://docs.rs/flyby-core/latest/flyby_core/trait.MetricKey.html
-[`MetricKind`]: https://docs.rs/flyby-core/latest/flyby_core/enum.MetricKind.html
-[`NullCollector`]: https://docs.rs/flyby-core/latest/flyby_core/struct.NullCollector.html

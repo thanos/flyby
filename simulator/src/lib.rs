@@ -1,13 +1,30 @@
-//! Simulator source and replay engine for FlyBy.
+//! Simulator package marker for FlyBy.
 //!
-//! This is the library target of the simulator package. The concrete
-//! synthetic source, replay format, and clock model arrive with Part VI
-//! of the specification. For now the crate exposes a minimal marker so
-//! the workspace compiles and the binary has a lib to link against.
+//! The real synthetic network source is `flyby_net::SimulatedNetSource`.
+//! This package keeps a workspace binary/lib for documentation and future
+//! replay tooling. Prefer `flyby::net` / `flyby_net` in application code.
 
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
-/// Placeholder for the future simulator source.
+/// Marker type; use `flyby_net::SimulatedNetSource` for real simulation.
 #[derive(Debug, Default)]
 pub struct SimulatorSource;
+
+impl SimulatorSource {
+    /// Points callers at the real simulator.
+    pub fn prefer_net_sim() -> &'static str {
+        "use flyby_net::SimulatedNetSource (or flyby::net::SimulatedNetSource)"
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn marker_smoke() {
+        let _ = SimulatorSource;
+        assert!(!SimulatorSource::prefer_net_sim().is_empty());
+    }
+}

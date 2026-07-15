@@ -2,7 +2,7 @@
 
 use flyby_core::MetricKey;
 
-/// Metric keys emitted by storage backends.
+/// Metric keys planned for storage backends (not all wired yet).
 ///
 /// All keys are in the `"storage.*"` namespace.  Counters are cumulative
 /// since the source was last initialised.

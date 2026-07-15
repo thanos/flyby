@@ -15,6 +15,8 @@
 - [Concepts](./concepts/README.md)
 - [Message](./concepts/message.md)
 - [Source](./concepts/source.md)
+- [Decoder](./concepts/decoder.md)
+- [Encode](./concepts/encode.md)
 - [Sink](./concepts/sink.md)
 - [PreProcessor](./concepts/preprocessor.md)
 - [Placement](./concepts/placement.md)

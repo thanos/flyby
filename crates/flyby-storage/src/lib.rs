@@ -33,7 +33,7 @@
 //! - `spdk` — compile the SPDK backend (requires an external SPDK installation).
 //!
 //! Neither flag enables the corresponding feature in production code today;
-//! both stubs return [`ErrorKind::FeatureNotEnabled`][flyby_core::ErrorKind::FeatureNotEnabled].
+//! both stubs return [`ErrorKind::NotImplemented`][flyby_core::ErrorKind::NotImplemented].
 //! The flags exist to keep the API surface stable as the backends are developed.
 
 #![forbid(unsafe_code)]

@@ -25,7 +25,7 @@ defining abstraction of the project.
 
 1. Safe Rust first.
 2. Unsafe is isolated.
-3. Zero-copy first, not zero-copy at all costs.
+3. Prefer zero-copy when measured; start with copy mode (ADR-0004).
 4. Benchmark every optimisation.
 5. Simulator before hardware.
 6. Hardware validation before release.

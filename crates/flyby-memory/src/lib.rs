@@ -20,18 +20,20 @@
 //! use flyby_memory::SharedMemorySink;
 //! use flyby_core::{Lifecycle, Sink};
 //!
-//! // 1. Create a sink with 1024 slots, each holding up to 64 payload bytes.
 //! let mut sink: SharedMemorySink<flyby_memory::StubMessage> =
 //!     SharedMemorySink::new(1024, 64).unwrap();
-//!
-//! // 2. Init (validates the region; no-op in the current implementation).
 //! sink.init().unwrap();
 //! ```
 //!
+//! ## Lifecycle
+//!
+//! [`Lifecycle::init`] resets the ring and write counter so the sink is
+//! reusable after [`Lifecycle::shutdown`].
+//!
 //! ## Unsafe code
 //!
-//! All `unsafe` is confined to [`region`] and [`slot`]. The public API of
-//! this crate is entirely safe.
+//! `unsafe` appears in [`region`], the internal ring control, and
+//! [`slot`]. The public API of this crate is entirely safe.
 
 #![deny(missing_docs)]
 #![deny(rustdoc::broken_intra_doc_links)]
@@ -42,7 +44,7 @@ pub mod slot;
 
 use std::marker::PhantomData;
 
-use flyby_core::{Encode, Error, ErrorKind, Lifecycle, Message, Result, SchemaId, Sink};
+use flyby_core::{Encode, Error, Lifecycle, Message, Result, SchemaId, Sink};
 
 use region::Region;
 use slot::{FLAG_SUSPECT, FLAG_VALID, SlotHeader, slot_size};
@@ -53,6 +55,9 @@ pub const DEFAULT_SLOT_COUNT: usize = 1024;
 /// Default maximum payload size in bytes.
 pub const DEFAULT_MAX_PAYLOAD: usize = 96;
 
+/// Stack threshold for the encode scratch buffer (avoids heap on hot path).
+const STACK_ENCODE_CAP: usize = 256;
+
 /// A sink that writes messages into a lock-free SPSC shared-memory ring.
 ///
 /// `M` is the concrete message type. It must implement both [`Message`]
@@ -60,6 +65,9 @@ pub const DEFAULT_MAX_PAYLOAD: usize = 96;
 ///
 /// Slots are written in the format defined by [`slot::SlotHeader`]. A
 /// consumer can decode them with [`slot::decode`].
+///
+/// `pop` is provided for tests and same-process consumers. A future
+/// `split()` API will separate producer/consumer handles for IPC.
 pub struct SharedMemorySink<M: Message + Encode> {
     region: Region,
     /// Maximum payload bytes per slot (slot_size - HEADER_SIZE).
@@ -76,7 +84,10 @@ impl<M: Message + Encode> SharedMemorySink<M> {
     /// - `max_payload` — maximum payload bytes per message. The total
     ///   slot size will be rounded up to the next cache-line multiple.
     pub fn new(slot_count: usize, max_payload: usize) -> Result<Self> {
-        let ss = slot_size(max_payload);
+        if max_payload > u32::MAX as usize {
+            return Err(Error::config("max_payload exceeds u32::MAX"));
+        }
+        let ss = slot_size(max_payload)?;
         let region = Region::anonymous(slot_count, ss)?;
         Ok(Self {
             region,
@@ -113,11 +124,21 @@ impl<M: Message + Encode> SharedMemorySink<M> {
     pub fn pop(&mut self, consume: impl FnOnce(&[u8])) -> bool {
         self.region.pop(consume)
     }
+
+    fn reset_ring(&mut self) {
+        while self.region.pop(|_| {}) {}
+        self.written = 0;
+    }
 }
 
 impl<M: Message + Encode> Lifecycle for SharedMemorySink<M> {
     fn init(&mut self) -> Result<()> {
-        self.written = 0;
+        self.reset_ring();
+        Ok(())
+    }
+
+    fn shutdown(&mut self) -> Result<()> {
+        // Leave ring contents for consumers; counter stays for diagnostics.
         Ok(())
     }
 }
@@ -128,14 +149,13 @@ impl<M: Message + Encode> Sink for SharedMemorySink<M> {
     fn write(&mut self, message: &M) -> Result<()> {
         let payload_len = message.encoded_len();
         if payload_len > self.max_payload {
-            return Err(Error::new(
-                ErrorKind::Sink,
-                format!(
-                    "encoded message ({} bytes) exceeds max_payload ({} bytes)",
-                    payload_len, self.max_payload
-                ),
-            ));
+            return Err(Error::sink(format!(
+                "encoded message ({} bytes) exceeds max_payload ({} bytes)",
+                payload_len, self.max_payload
+            )));
         }
+        let payload_len_u32 = u32::try_from(payload_len)
+            .map_err(|_| Error::sink("encoded message length exceeds u32::MAX"))?;
 
         let meta = message.metadata();
         let ts = message.timestamp();
@@ -147,27 +167,38 @@ impl<M: Message + Encode> Sink for SharedMemorySink<M> {
             flags,
             meta.sequence,
             ts.as_nanos(),
-            payload_len as u32,
+            payload_len_u32,
         );
 
-        let pushed = self.region.push(|buf| {
-            // Encode payload into a temporary stack buffer then copy into
-            // the slot. Avoids holding a mutable borrow on `region` while
-            // calling user code that might re-enter the sink.
-            //
-            // For payloads up to DEFAULT_MAX_PAYLOAD this stays on the
-            // stack. A heap fallback is used for larger payloads (rare in
-            // practice; slot sizes are configured at construction time).
-            let mut tmp = vec![0u8; payload_len];
-            message.encode_into(&mut tmp)?;
-            slot::encode(&header, &tmp, buf)
-        })?;
+        // Encode into a small stack buffer when possible to avoid hot-path
+        // heap allocation. Larger payloads fall back to the heap.
+        let pushed = if payload_len <= STACK_ENCODE_CAP {
+            let mut stack = [0u8; STACK_ENCODE_CAP];
+            let n = message.encode_into(&mut stack[..payload_len])?;
+            if n != payload_len {
+                return Err(Error::encode(
+                    "encode_into length does not match encoded_len",
+                ));
+            }
+            self.region
+                .push(|buf| slot::encode(&header, &stack[..n], buf))?
+        } else {
+            let mut heap = vec![0u8; payload_len];
+            let n = message.encode_into(&mut heap)?;
+            if n != payload_len {
+                return Err(Error::encode(
+                    "encode_into length does not match encoded_len",
+                ));
+            }
+            self.region
+                .push(|buf| slot::encode(&header, &heap[..n], buf))?
+        };
 
         if pushed {
             self.written += 1;
             Ok(())
         } else {
-            Err(Error::new(ErrorKind::Sink, "ring buffer full"))
+            Err(Error::back_pressure("ring buffer full"))
         }
     }
 }
@@ -189,7 +220,7 @@ impl Message for StubMessage {
     type Schema = flyby_core::DefaultSchemaId;
 
     fn schema_id(&self) -> flyby_core::DefaultSchemaId {
-        flyby_core::DefaultSchemaId(0)
+        flyby_core::DefaultSchemaId(1)
     }
 
     fn timestamp(&self) -> flyby_core::Timestamp {
@@ -211,10 +242,7 @@ impl Encode for StubMessage {
 
     fn encode_into(&self, dst: &mut [u8]) -> Result<usize> {
         if dst.len() < 8 {
-            return Err(Error::new(
-                ErrorKind::Encode,
-                "buffer too small for StubMessage",
-            ));
+            return Err(Error::encode("buffer too small for StubMessage"));
         }
         dst[..8].copy_from_slice(&self.seq.to_be_bytes());
         Ok(8)
@@ -224,7 +252,7 @@ impl Encode for StubMessage {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use flyby_core::Sink;
+    use flyby_core::{ErrorKind, Sink};
 
     fn make_sink() -> SharedMemorySink<StubMessage> {
         SharedMemorySink::new(16, 64).unwrap()
@@ -257,18 +285,18 @@ mod tests {
     }
 
     #[test]
-    fn full_ring_returns_error() {
+    fn full_ring_returns_back_pressure() {
         let mut sink = SharedMemorySink::new(4, 64).unwrap();
         for i in 0..4 {
             sink.write(&msg(i)).unwrap();
         }
-        assert!(sink.write(&msg(99)).is_err());
+        let err = sink.write(&msg(99)).unwrap_err();
+        assert_eq!(err.kind(), ErrorKind::BackPressure);
     }
 
     #[test]
     fn oversized_payload_returns_error() {
-        let mut sink = SharedMemorySink::new(4, 4).unwrap(); // max 4 bytes
-        // StubMessage encodes 8 bytes — exceeds max
+        let mut sink = SharedMemorySink::new(4, 4).unwrap();
         assert!(sink.write(&msg(0)).is_err());
     }
 
@@ -285,5 +313,45 @@ mod tests {
         }) {}
         let expected: Vec<u64> = (0..8).collect();
         assert_eq!(seqs, expected);
+    }
+
+    #[test]
+    fn reinit_clears_ring() {
+        let mut sink = make_sink();
+        sink.init().unwrap();
+        sink.write(&msg(1)).unwrap();
+        assert_eq!(sink.len(), 1);
+        sink.shutdown().unwrap();
+        sink.init().unwrap();
+        assert_eq!(sink.written(), 0);
+        assert!(sink.is_empty());
+    }
+
+    #[test]
+    fn failed_encode_does_not_advance_ring() {
+        struct BadMsg;
+        impl Message for BadMsg {
+            type Schema = flyby_core::DefaultSchemaId;
+            fn schema_id(&self) -> flyby_core::DefaultSchemaId {
+                flyby_core::DefaultSchemaId(1)
+            }
+            fn timestamp(&self) -> flyby_core::Timestamp {
+                flyby_core::Timestamp::from_nanos(0)
+            }
+            fn metadata(&self) -> flyby_core::Metadata {
+                flyby_core::Metadata::default()
+            }
+        }
+        impl Encode for BadMsg {
+            fn encoded_len(&self) -> usize {
+                8
+            }
+            fn encode_into(&self, _dst: &mut [u8]) -> Result<usize> {
+                Err(Error::encode("boom"))
+            }
+        }
+        let mut sink: SharedMemorySink<BadMsg> = SharedMemorySink::new(4, 64).unwrap();
+        assert!(sink.write(&BadMsg).is_err());
+        assert!(sink.is_empty());
     }
 }

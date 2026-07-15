@@ -1,7 +1,7 @@
 //! io_uring storage backend.
 //!
 //! Enabled by the `io_uring` Cargo feature.  Currently a design stub — the
-//! interface compiles and returns [`ErrorKind::FeatureNotEnabled`] until the
+//! interface compiles and returns [`ErrorKind::NotImplemented`] until the
 //! real binding is implemented.
 //!
 //! ## io_uring primer
@@ -60,7 +60,7 @@ use crate::source::StorageSource;
 
 /// io_uring-backed storage source.
 ///
-/// All methods currently return [`ErrorKind::FeatureNotEnabled`] because the
+/// All methods currently return [`ErrorKind::NotImplemented`] because the
 /// real io_uring binding has not yet been implemented.  The struct compiles
 /// cleanly behind the `io_uring` feature flag so the workspace integration
 /// tests can confirm the API shape.
@@ -84,7 +84,7 @@ impl IoUringSource {
 impl Lifecycle for IoUringSource {
     fn init(&mut self) -> Result<()> {
         Err(Error::new(
-            ErrorKind::FeatureNotEnabled,
+            ErrorKind::NotImplemented,
             "io_uring backend: feature 'io_uring' is enabled but the backend is not yet \
              implemented; use FileSource for now",
         ))
@@ -98,7 +98,7 @@ impl Lifecycle for IoUringSource {
 impl StorageSource for IoUringSource {
     fn poll_batch(&mut self, _batch: &mut RawRecordBatch) -> Result<usize> {
         Err(Error::new(
-            ErrorKind::FeatureNotEnabled,
+            ErrorKind::NotImplemented,
             "io_uring backend: not yet implemented",
         ))
     }
@@ -118,18 +118,18 @@ mod tests {
     use crate::batch::RawRecordBatch;
 
     #[test]
-    fn init_returns_feature_not_enabled() {
+    fn init_returns_not_implemented() {
         let mut src = IoUringSource::new(FileConfig::default(), IoUringConfig::default());
         let err = src.init().unwrap_err();
-        assert_eq!(err.kind(), ErrorKind::FeatureNotEnabled);
+        assert_eq!(err.kind(), ErrorKind::NotImplemented);
     }
 
     #[test]
-    fn poll_returns_feature_not_enabled() {
+    fn poll_returns_not_implemented() {
         let mut src = IoUringSource::new(FileConfig::default(), IoUringConfig::default());
         let mut batch = RawRecordBatch::new(4, 64);
         let err = src.poll_batch(&mut batch).unwrap_err();
-        assert_eq!(err.kind(), ErrorKind::FeatureNotEnabled);
+        assert_eq!(err.kind(), ErrorKind::NotImplemented);
     }
 
     #[test]
