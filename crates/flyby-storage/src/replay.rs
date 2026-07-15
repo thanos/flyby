@@ -73,12 +73,8 @@ impl ReplayMode {
     /// Validate mode parameters.
     pub fn validate(&self) -> Result<()> {
         match self {
-            ReplayMode::TimeScaled { factor }
-                if !factor.is_finite() || *factor <= 0.0 =>
-            {
-                Err(Error::config(
-                    "TimeScaled factor must be finite and > 0",
-                ))
+            ReplayMode::TimeScaled { factor } if !factor.is_finite() || *factor <= 0.0 => {
+                Err(Error::config("TimeScaled factor must be finite and > 0"))
             }
             ReplayMode::Burst { count, .. } if *count == 0 => {
                 Err(Error::config("Burst count must be ≥ 1"))
