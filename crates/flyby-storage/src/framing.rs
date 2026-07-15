@@ -13,7 +13,7 @@
 //! All strategies share the [`Frame`] trait: given a byte buffer they return
 //! the length of the next record (or `None` if more data is needed).  The
 //! [`FileSource`][crate::file::FileSource] uses the strategy to split its
-//! read buffer into records before populating a [`RawRecordBatch`].
+//! read buffer into records before populating a [`crate::batch::RawRecordBatch`].
 //!
 //! ## Framing vs parsing
 //!

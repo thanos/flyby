@@ -17,13 +17,13 @@
 //!
 //! ## Replay
 //!
-//! The [`ReplayEngine`][replay::ReplayEngine] is backend-independent: it
+//! The [`ReplayEngine`] is backend-independent: it
 //! controls *when* records are released to the pipeline, not *how* they are
 //! read from storage.  Any backend can be combined with any replay mode.
 //!
 //! ## Framing
 //!
-//! Records are extracted from the raw byte stream by a [`Frame`][framing::Frame]
+//! Records are extracted from the raw byte stream by a [`Frame`]
 //! implementation.  Four built-in strategies are provided; custom framers are
 //! supported via [`framing::Custom`].
 //!

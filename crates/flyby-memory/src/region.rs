@@ -44,7 +44,7 @@ const HEADER_OFFSET: usize = 0;
 const HEADER_BYTES: usize = 64;
 const PRODUCER_OFFSET: usize = 64;  // head counter — one full cache line
 const CONSUMER_OFFSET: usize = 128; // tail counter — one full cache line
-/// Byte offset at which slot[0] begins.
+/// Byte offset at which the first slot begins.
 pub const SLOTS_OFFSET: usize = 192;
 
 /// On-disk region header stored at offset 0 of the mmap.
@@ -111,8 +111,8 @@ impl Region {
     ///
     /// # Errors
     ///
-    /// Returns [`ErrorKind::Config`] for invalid parameters or
-    /// [`ErrorKind::Io`] if `mmap(2)` fails.
+    /// Returns [`flyby_core::ErrorKind::Config`] for invalid parameters or
+    /// [`flyby_core::ErrorKind::Io`] if `mmap(2)` fails.
     pub fn anonymous(slot_count: usize, slot_size: usize) -> Result<Self> {
         Self::validate_params(slot_count, slot_size)?;
         let len = SLOTS_OFFSET + slot_count * slot_size;

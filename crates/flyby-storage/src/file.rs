@@ -1,7 +1,7 @@
 //! Sequential file backend.
 //!
 //! [`FileSource`] reads records from a local file using a configurable
-//! [`Frame`][crate::framing::Frame] strategy.  It is the simplest storage
+//! [`Frame`] strategy.  It is the simplest storage
 //! backend: no async I/O, no DMA, no ring buffers.  Its purpose is to
 //! validate the pipeline and replay engine before the io_uring and SPDK
 //! backends are introduced (ADR-0005).

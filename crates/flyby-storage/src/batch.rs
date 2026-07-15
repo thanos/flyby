@@ -1,6 +1,6 @@
 //! [`RawRecordBatch`]: a pre-allocated, reusable batch of raw storage records.
 //!
-//! Mirrors [`flyby_net::RawBatch`] but for file/NVMe sources.  Each slot
+//! Mirrors `flyby_net::RawBatch` but for file/NVMe sources.  Each slot
 //! holds the raw bytes of one framed record.  The batch is allocated once
 //! and reused across polls to avoid per-batch heap allocation in the hot path.
 //!

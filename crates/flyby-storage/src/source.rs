@@ -1,4 +1,4 @@
-//! [`StorageSource`]: the storage analogue of [`flyby_net::NetworkSource`].
+//! [`StorageSource`]: the storage analogue of `flyby_net::NetworkSource`.
 //!
 //! Any storage backend (file, io_uring, SPDK) must implement this trait.
 //! The pipeline treats all backends identically — only the configuration and
