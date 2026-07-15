@@ -28,8 +28,8 @@ use crate::{Message, Result};
 /// Converts a raw byte slice produced by a [`crate::Source`] into a
 /// typed [`Message`].
 ///
-/// Decoders that live on a worker thread must be `Send` (required here).
-pub trait Decoder: Send {
+/// Decoders that live on a worker thread must be `Send + Sync`.
+pub trait Decoder: Send + Sync {
     /// The concrete message type this decoder produces.
     type Output: Message;
 

@@ -7,6 +7,7 @@ sink.
 ## Status
 
 - Builder `.run()` validates feature selection (skeleton).
-- Builder `.run_demo()` exercises simulator → decoder → memory sink when
+- `SimplePipeline` drives source → decode → preprocess → place → sink.
+- Builder `.run_demo()` builds a `SimplePipeline` (sim → memory) when
   the `memory` feature is enabled.
-- Full multi-stage pipeline composition (placement, multi-sink) is WIP.
+- Multi-sink registration and type-state builder remain incremental work.

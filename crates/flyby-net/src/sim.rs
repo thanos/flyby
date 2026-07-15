@@ -16,10 +16,13 @@
 //! Checksums are intentionally wrong (all zeros) — the simulator is for
 //! pipeline testing, not wire-compatible replay.
 
-use flyby_core::{Error, Lifecycle, Result, Source};
+use std::sync::Arc;
+
+use flyby_core::{Error, Lifecycle, MetricsCollector, NullCollector, Result, Source};
 
 use crate::batch::{PacketMeta, PushResult, RawBatch};
 use crate::config::SimNetConfig;
+use crate::metrics::NetMetricKey;
 use crate::source::NetworkSource;
 
 // Fixed Ethernet/IP/UDP header sizes.
@@ -48,6 +51,7 @@ pub struct SimulatedNetSource {
     /// Single-packet buffer for the `Source::poll` shim.
     poll_scratch: Vec<u8>,
     initialized: bool,
+    metrics: Arc<dyn MetricsCollector>,
 }
 
 impl SimulatedNetSource {
@@ -81,7 +85,14 @@ impl SimulatedNetSource {
             template,
             poll_scratch: Vec::new(),
             initialized: false,
+            metrics: Arc::new(NullCollector),
         }
+    }
+
+    /// Attach a metrics collector (shared across polls).
+    pub fn with_metrics(mut self, metrics: Arc<dyn MetricsCollector>) -> Self {
+        self.metrics = metrics;
+        self
     }
 
     fn fill_static_headers(buf: &mut [u8], udp_dst_port: u16, frame_size: usize) {
@@ -178,6 +189,7 @@ impl NetworkSource for SimulatedNetSource {
         self.ensure_init()?;
 
         batch.reset(self.frame_size());
+        self.metrics.record_counter(&NetMetricKey::BatchesPolled, 1);
 
         // Idle: empty batch at configured idle_rate (independent PRNG stream).
         if self.rate_hit(self.config.idle_rate) {
@@ -187,17 +199,20 @@ impl NetworkSource for SimulatedNetSource {
         let intended = self.config.batch_size;
         let capacity = batch.capacity();
         let mut produced = 0usize;
+        let mut dropped_this = 0u64;
+        let mut bytes = 0u64;
 
         for _ in 0..intended {
             if self.rate_hit(self.config.drop_rate) {
                 batch.record_drop();
+                dropped_this += 1;
                 self.sequence = self.sequence.wrapping_add(1);
                 continue;
             }
 
             if produced >= capacity {
-                // Cannot fit remaining intended packets — count as drops.
                 batch.record_drop();
+                dropped_this += 1;
                 self.sequence = self.sequence.wrapping_add(1);
                 continue;
             }
@@ -212,12 +227,27 @@ impl NetworkSource for SimulatedNetSource {
             match batch.push(&self.template, meta) {
                 PushResult::Ok | PushResult::Truncated => {
                     produced += 1;
+                    bytes += frame_len as u64;
                 }
                 PushResult::Full => {
                     batch.record_drop();
+                    dropped_this += 1;
                 }
             }
             self.sequence = self.sequence.wrapping_add(1);
+        }
+
+        if produced > 0 {
+            self.metrics
+                .record_counter(&NetMetricKey::PacketsReceived, produced as u64);
+            self.metrics
+                .record_counter(&NetMetricKey::BytesReceived, bytes);
+            self.metrics
+                .record_histogram(&NetMetricKey::BatchSize, produced as f64);
+        }
+        if dropped_this > 0 {
+            self.metrics
+                .record_counter(&NetMetricKey::PacketsDropped, dropped_this);
         }
 
         Ok(batch.len())

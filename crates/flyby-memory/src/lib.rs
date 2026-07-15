@@ -43,11 +43,36 @@ mod ring;
 pub mod slot;
 
 use std::marker::PhantomData;
+use std::sync::Arc;
 
-use flyby_core::{Encode, Error, Lifecycle, Message, Result, SchemaId, Sink};
+use flyby_core::{
+    Encode, Error, Lifecycle, Message, MetricKey, MetricKind, MetricsCollector, NullCollector,
+    Result, SchemaId, Sink,
+};
 
 use region::Region;
 use slot::{FLAG_SUSPECT, FLAG_VALID, SlotHeader, slot_size};
+
+/// Metric keys for the shared-memory sink.
+#[derive(Debug, Clone, Copy)]
+pub enum MemoryMetricKey {
+    /// Messages successfully written.
+    MessagesWritten,
+    /// Write attempts rejected because the ring was full.
+    RingFull,
+    /// Write attempts rejected for oversized payload.
+    Oversized,
+}
+
+impl MetricKey for MemoryMetricKey {
+    fn name(&self) -> &str {
+        match self {
+            Self::MessagesWritten => "memory.messages_written",
+            Self::RingFull => "memory.ring_full",
+            Self::Oversized => "memory.oversized",
+        }
+    }
+}
 
 /// Default number of ring slots (power of two).
 pub const DEFAULT_SLOT_COUNT: usize = 1024;
@@ -74,6 +99,7 @@ pub struct SharedMemorySink<M: Message + Encode> {
     max_payload: usize,
     /// Total messages successfully written to the ring.
     written: u64,
+    metrics: Arc<dyn MetricsCollector>,
     _marker: PhantomData<M>,
 }
 
@@ -93,8 +119,15 @@ impl<M: Message + Encode> SharedMemorySink<M> {
             region,
             max_payload,
             written: 0,
+            metrics: Arc::new(NullCollector),
             _marker: PhantomData,
         })
+    }
+
+    /// Attach a metrics collector.
+    pub fn with_metrics(mut self, metrics: Arc<dyn MetricsCollector>) -> Self {
+        self.metrics = metrics;
+        self
     }
 
     /// Total messages successfully handed to [`Sink::write`].
@@ -149,6 +182,8 @@ impl<M: Message + Encode> Sink for SharedMemorySink<M> {
     fn write(&mut self, message: &M) -> Result<()> {
         let payload_len = message.encoded_len();
         if payload_len > self.max_payload {
+            self.metrics
+                .record(&MemoryMetricKey::Oversized, MetricKind::Counter, 1.0);
             return Err(Error::sink(format!(
                 "encoded message ({} bytes) exceeds max_payload ({} bytes)",
                 payload_len, self.max_payload
@@ -196,8 +231,11 @@ impl<M: Message + Encode> Sink for SharedMemorySink<M> {
 
         if pushed {
             self.written += 1;
+            self.metrics
+                .record_counter(&MemoryMetricKey::MessagesWritten, 1);
             Ok(())
         } else {
+            self.metrics.record_counter(&MemoryMetricKey::RingFull, 1);
             Err(Error::back_pressure("ring buffer full"))
         }
     }

@@ -63,7 +63,7 @@ pub use encoder::Encode;
 pub use error::{Error, ErrorKind, Result};
 pub use lifecycle::Lifecycle;
 pub use message::{DefaultSchemaId, Message, Metadata, SchemaId, Timestamp};
-pub use metrics::{MetricKey, MetricKind, MetricsCollector, NullCollector};
+pub use metrics::{CountingCollector, MetricKey, MetricKind, MetricsCollector, NullCollector};
 pub use pipeline::{Pipeline, StepOutcome};
 pub use placement::{Placement, SinkId};
 pub use preprocessor::PreProcessor;
@@ -83,7 +83,9 @@ pub mod prelude {
     pub use crate::error::{Error, Result};
     pub use crate::lifecycle::Lifecycle;
     pub use crate::message::{DefaultSchemaId, Message, Metadata, SchemaId, Timestamp};
-    pub use crate::metrics::{MetricKey, MetricKind, MetricsCollector, NullCollector};
+    pub use crate::metrics::{
+        CountingCollector, MetricKey, MetricKind, MetricsCollector, NullCollector,
+    };
     pub use crate::pipeline::{Pipeline, StepOutcome};
     pub use crate::placement::{Placement, SinkId};
     pub use crate::preprocessor::PreProcessor;

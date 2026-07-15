@@ -21,7 +21,8 @@ preserving high performance, safety, and excellent documentation.
 | Network simulator | **Implemented** |
 | File source + framing + replay engine | **Implemented** |
 | Facade builder `.run()` | Skeleton (config validation) |
-| Facade `run_demo()` | Minimal sim → sink path |
+| `SimplePipeline` | **Implemented** (source→decode→place→sink) |
+| Facade `run_demo()` | Builds `SimplePipeline` (sim → memory) |
 | AF_XDP / DPDK / io_uring / SPDK | Stubs (`NotImplemented`) |
 
 ## Workspace layout

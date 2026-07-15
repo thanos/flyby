@@ -42,13 +42,15 @@
 
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use flyby_core::{Error, ErrorKind, Lifecycle, Result};
+use flyby_core::{Error, ErrorKind, Lifecycle, MetricsCollector, NullCollector, Result};
 
 use crate::batch::{RawRecordBatch, RecordMeta};
 use crate::config::{EofPolicy, FileConfig};
 use crate::framing::Frame;
+use crate::metrics::StorageMetricKey;
 use crate::source::StorageSource;
 
 // Read buffer chunk size: read this many bytes from the file at a time.
@@ -81,6 +83,7 @@ pub struct FileSource<F: Frame> {
     follow_next: Option<Instant>,
     /// Complete records emitted since the last Loop rewind (or init).
     records_since_rewind: u64,
+    metrics: Arc<dyn MetricsCollector>,
 }
 
 impl<F: Frame> FileSource<F> {
@@ -101,7 +104,14 @@ impl<F: Frame> FileSource<F> {
             initialized: false,
             follow_next: None,
             records_since_rewind: 0,
+            metrics: Arc::new(NullCollector),
         }
+    }
+
+    /// Attach a metrics collector.
+    pub fn with_metrics(mut self, metrics: Arc<dyn MetricsCollector>) -> Self {
+        self.metrics = metrics;
+        self
     }
 
     /// Borrow the file configuration.
@@ -137,6 +147,10 @@ impl<F: Frame> FileSource<F> {
         let n = file.read(&mut self.read_buf[prev_len..])?;
         self.read_buf.truncate(prev_len + n);
         self.bytes_read += n as u64;
+        if n > 0 {
+            self.metrics
+                .record_counter(&StorageMetricKey::BytesRead, n as u64);
+        }
         Ok(n > 0)
     }
 
@@ -149,6 +163,8 @@ impl<F: Frame> FileSource<F> {
                 // Incomplete trailing bytes are discarded by design.
                 self.read_buf.clear();
                 self.exhausted = true;
+                self.metrics
+                    .record_counter(&StorageMetricKey::EofReached, 1);
                 Ok(false)
             }
             EofPolicy::Loop => {
@@ -180,6 +196,7 @@ impl<F: Frame> FileSource<F> {
                 self.loop_count += 1;
                 self.records_since_rewind = 0;
                 *rewound_this_poll = true;
+                self.metrics.record_counter(&StorageMetricKey::LoopCount, 1);
                 Ok(true)
             }
             EofPolicy::Follow { poll_interval } => {
@@ -229,6 +246,8 @@ impl<F: Frame> FileSource<F> {
         self.buf_file_offset += len as u64;
         self.record_index += 1;
         self.records_since_rewind += 1;
+        self.metrics
+            .record_counter(&StorageMetricKey::RecordsRead, 1);
         Ok(())
     }
 }

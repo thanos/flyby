@@ -38,9 +38,9 @@ pub use flyby_core as core;
 /// Core traits, errors, and lifecycle.
 pub mod api {
     pub use flyby_core::{
-        Decoder, DefaultSchemaId, Encode, Error, ErrorKind, Lifecycle, Message, Metadata,
-        MetricKey, MetricKind, MetricsCollector, NullCollector, Pipeline, Placement, PreProcessor,
-        Result, SchemaId, Sink, SinkId, Source, StepOutcome, Timestamp,
+        CountingCollector, Decoder, DefaultSchemaId, Encode, Error, ErrorKind, Lifecycle, Message,
+        Metadata, MetricKey, MetricKind, MetricsCollector, NullCollector, Pipeline, Placement,
+        PreProcessor, Result, SchemaId, Sink, SinkId, Source, StepOutcome, Timestamp,
     };
 }
 
@@ -48,9 +48,14 @@ pub mod api {
 pub mod prelude {
     pub use crate::api::*;
     pub use crate::builder::{FlyBy, FlyByBuilder};
+    pub use crate::pipeline::{
+        DropAllPlacement, FixedPlacement, IdentityPreProcessor, NetworkBatchSource, RawBatchSource,
+        SimplePipeline, StorageBatchSource,
+    };
 }
 
 pub mod builder;
+pub mod pipeline;
 
 // --- Backend re-exports ----------------------------------------------------
 

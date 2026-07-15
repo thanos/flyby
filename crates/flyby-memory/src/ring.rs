@@ -251,4 +251,56 @@ mod tests {
         let (ring, _h, _t) = make_ring(8);
         assert_eq!(ring.capacity(), 8);
     }
+
+    #[test]
+    fn concurrent_spsc_no_loss_or_dup() {
+        use std::sync::Arc;
+        use std::thread;
+
+        const CAP: usize = 1024;
+        const N: u64 = 50_000;
+
+        let head: &'static AtomicU64 = Box::leak(Box::new(AtomicU64::new(0)));
+        let tail: &'static AtomicU64 = Box::leak(Box::new(AtomicU64::new(0)));
+        // Side channel for payloads: one AtomicU64 per slot.
+        let slots: Arc<Vec<AtomicU64>> = Arc::new((0..CAP).map(|_| AtomicU64::new(0)).collect());
+
+        let slots_p = Arc::clone(&slots);
+        let producer = thread::spawn(move || {
+            let ring = unsafe { SpscRing::new(NonNull::from(head), NonNull::from(tail), CAP) };
+            for i in 0..N {
+                loop {
+                    if let Some(idx) = ring.try_push() {
+                        slots_p[idx].store(i, Ordering::Relaxed);
+                        ring.commit_push();
+                        break;
+                    }
+                    std::hint::spin_loop();
+                }
+            }
+        });
+
+        let slots_c = Arc::clone(&slots);
+        let consumer = thread::spawn(move || {
+            let ring = unsafe { SpscRing::new(NonNull::from(head), NonNull::from(tail), CAP) };
+            let mut got = Vec::with_capacity(N as usize);
+            while got.len() < N as usize {
+                if let Some(idx) = ring.try_pop() {
+                    got.push(slots_c[idx].load(Ordering::Relaxed));
+                    ring.commit_pop();
+                } else {
+                    std::hint::spin_loop();
+                }
+            }
+            got
+        });
+
+        producer.join().unwrap();
+        let got = consumer.join().unwrap();
+        let expected: Vec<u64> = (0..N).collect();
+        assert_eq!(
+            got, expected,
+            "SPSC must deliver every message once in order"
+        );
+    }
 }
