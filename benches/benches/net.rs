@@ -38,17 +38,24 @@ fn bench_sim_throughput(c: &mut Criterion) {
     for &batch_size in &[8usize, 32, 64, 256] {
         let total = batch_size as u64;
         group.throughput(Throughput::Elements(total));
-        group.bench_with_input(BenchmarkId::from_parameter(batch_size), &batch_size, |b, &n| {
-            let config = SimNetConfig { batch_size: n, ..SimNetConfig::default() };
-            let mut src = SimulatedNetSource::new(config);
-            src.init().unwrap();
-            let mut batch = RawBatch::new(n, 2048);
+        group.bench_with_input(
+            BenchmarkId::from_parameter(batch_size),
+            &batch_size,
+            |b, &n| {
+                let config = SimNetConfig {
+                    batch_size: n,
+                    ..SimNetConfig::default()
+                };
+                let mut src = SimulatedNetSource::new(config);
+                src.init().unwrap();
+                let mut batch = RawBatch::new(n, 2048);
 
-            b.iter(|| {
-                let count = src.poll_batch(black_box(&mut batch)).unwrap();
-                black_box(count);
-            });
-        });
+                b.iter(|| {
+                    let count = src.poll_batch(black_box(&mut batch)).unwrap();
+                    black_box(count);
+                });
+            },
+        );
     }
     group.finish();
 }
@@ -58,7 +65,10 @@ fn bench_sim_throughput(c: &mut Criterion) {
 // ---------------------------------------------------------------------------
 
 fn bench_sim_latency(c: &mut Criterion) {
-    let config = SimNetConfig { batch_size: 1, ..SimNetConfig::default() };
+    let config = SimNetConfig {
+        batch_size: 1,
+        ..SimNetConfig::default()
+    };
     let mut src = SimulatedNetSource::new(config);
     src.init().unwrap();
     let mut batch = RawBatch::new(1, 2048);
@@ -80,8 +90,11 @@ fn bench_sim_packet_size(c: &mut Criterion) {
     for &payload in &[8usize, 64, 512, 1400] {
         group.throughput(Throughput::Bytes((payload + 42) as u64 * 32)); // 32 per batch
         group.bench_with_input(BenchmarkId::from_parameter(payload), &payload, |b, &p| {
-            let config =
-                SimNetConfig { payload_size: p, batch_size: 32, ..SimNetConfig::default() };
+            let config = SimNetConfig {
+                payload_size: p,
+                batch_size: 32,
+                ..SimNetConfig::default()
+            };
             let mut src = SimulatedNetSource::new(config);
             src.init().unwrap();
             let mut batch = RawBatch::new(32, 2048);
@@ -94,5 +107,10 @@ fn bench_sim_packet_size(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, bench_sim_throughput, bench_sim_latency, bench_sim_packet_size,);
+criterion_group!(
+    benches,
+    bench_sim_throughput,
+    bench_sim_latency,
+    bench_sim_packet_size,
+);
 criterion_main!(benches);

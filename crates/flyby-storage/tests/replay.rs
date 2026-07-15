@@ -7,8 +7,8 @@
 //! - TimeScaled: same as OriginalTiming but stretched/compressed
 //! - Burst: N records then a gap
 
-use std::time::Duration;
 use flyby_storage::{ReplayEngine, ReplayMode};
+use std::time::Duration;
 
 // ---------------------------------------------------------------------------
 // FullSpeed
@@ -69,7 +69,10 @@ fn original_timing_far_future_record_not_ready() {
     engine.poll(0); // anchor the start time at ts=0
     // Ask for a record 1 hour in the future (wall time just started)
     let one_hour_ns = 3_600_000_000_000u64;
-    assert!(!engine.poll(one_hour_ns), "record 1 hour ahead should not be ready immediately");
+    assert!(
+        !engine.poll(one_hour_ns),
+        "record 1 hour ahead should not be ready immediately"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -90,17 +93,24 @@ fn time_scaled_fast_forward_does_not_block_past_records() {
     engine.poll(0); // anchor
     std::thread::sleep(std::time::Duration::from_millis(10));
     let ts_one_second = 1_000_000_000u64;
-    assert!(engine.poll(ts_one_second),
-        "after 10 ms sleep, a 1 µs deadline should definitely have passed");
+    assert!(
+        engine.poll(ts_one_second),
+        "after 10 ms sleep, a 1 µs deadline should definitely have passed"
+    );
 }
 
 #[test]
 fn time_scaled_slow_down_holds_record() {
     // factor=1_000_000 = 1 000 000× slow-down: a record 1 µs ahead in original
     // time needs 1 second of wall time. Should not be ready.
-    let mut engine = ReplayEngine::new(ReplayMode::TimeScaled { factor: 1_000_000.0 });
+    let mut engine = ReplayEngine::new(ReplayMode::TimeScaled {
+        factor: 1_000_000.0,
+    });
     engine.poll(0);
-    assert!(!engine.poll(1_000), "1 000× slow-down: 1 µs original time = 1 s wall time, should block");
+    assert!(
+        !engine.poll(1_000),
+        "1 000× slow-down: 1 µs original time = 1 s wall time, should block"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -109,8 +119,10 @@ fn time_scaled_slow_down_holds_record() {
 
 #[test]
 fn burst_emits_configured_count_then_pauses() {
-    let mut engine =
-        ReplayEngine::new(ReplayMode::Burst { count: 3, gap: Duration::from_secs(3600) });
+    let mut engine = ReplayEngine::new(ReplayMode::Burst {
+        count: 3,
+        gap: Duration::from_secs(3600),
+    });
     assert!(engine.poll(0)); // 1
     assert!(engine.poll(0)); // 2
     assert!(engine.poll(0)); // 3 — triggers pause
@@ -120,8 +132,10 @@ fn burst_emits_configured_count_then_pauses() {
 
 #[test]
 fn burst_resumes_after_zero_gap() {
-    let mut engine =
-        ReplayEngine::new(ReplayMode::Burst { count: 1, gap: Duration::ZERO });
+    let mut engine = ReplayEngine::new(ReplayMode::Burst {
+        count: 1,
+        gap: Duration::ZERO,
+    });
     assert!(engine.poll(0)); // burst of 1, then zero-gap pause
     // A zero gap means the pause ends immediately; the next call should succeed.
     assert!(engine.poll(0));
@@ -130,8 +144,10 @@ fn burst_resumes_after_zero_gap() {
 #[test]
 fn burst_count_one_alternates() {
     // count=1, gap=0 → emit one, (instant resume), emit one, ...
-    let mut engine =
-        ReplayEngine::new(ReplayMode::Burst { count: 1, gap: Duration::ZERO });
+    let mut engine = ReplayEngine::new(ReplayMode::Burst {
+        count: 1,
+        gap: Duration::ZERO,
+    });
     for _ in 0..10 {
         assert!(engine.poll(0));
     }
@@ -139,8 +155,10 @@ fn burst_count_one_alternates() {
 
 #[test]
 fn burst_independent_of_timestamp() {
-    let mut engine =
-        ReplayEngine::new(ReplayMode::Burst { count: 2, gap: Duration::from_secs(9999) });
+    let mut engine = ReplayEngine::new(ReplayMode::Burst {
+        count: 2,
+        gap: Duration::from_secs(9999),
+    });
     // timestamps are ignored by burst mode
     assert!(engine.poll(0));
     assert!(engine.poll(u64::MAX));

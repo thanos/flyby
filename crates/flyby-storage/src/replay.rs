@@ -105,7 +105,13 @@ pub struct ReplayEngine {
 impl ReplayEngine {
     /// Create a replay engine with the given mode.
     pub fn new(mode: ReplayMode) -> Self {
-        Self { mode, start: None, first_ts_ns: None, burst_count: 0, burst_resume: None }
+        Self {
+            mode,
+            start: None,
+            first_ts_ns: None,
+            burst_count: 0,
+            burst_resume: None,
+        }
     }
 
     /// Query whether the next record (with the given `timestamp_ns`) should be
@@ -125,9 +131,7 @@ impl ReplayEngine {
 
             ReplayMode::SingleStep => true,
 
-            ReplayMode::OriginalTiming => {
-                self.original_timing_ready(now, timestamp_ns, 1.0)
-            }
+            ReplayMode::OriginalTiming => self.original_timing_ready(now, timestamp_ns, 1.0),
 
             ReplayMode::TimeScaled { factor } => {
                 let f = *factor;
@@ -210,8 +214,10 @@ mod tests {
 
     #[test]
     fn burst_emits_then_pauses() {
-        let mut engine =
-            ReplayEngine::new(ReplayMode::Burst { count: 2, gap: Duration::from_secs(3600) });
+        let mut engine = ReplayEngine::new(ReplayMode::Burst {
+            count: 2,
+            gap: Duration::from_secs(3600),
+        });
         assert!(engine.poll(0)); // record 1 in burst
         assert!(engine.poll(0)); // record 2 in burst — triggers pause
         assert!(!engine.poll(0)); // still paused

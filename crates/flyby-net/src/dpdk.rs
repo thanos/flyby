@@ -150,7 +150,11 @@ mod tests {
 
     #[test]
     fn config_is_accessible() {
-        let config = DpdkConfig { rx_queue_id: 3, burst_size: 16, ..DpdkConfig::default() };
+        let config = DpdkConfig {
+            rx_queue_id: 3,
+            burst_size: 16,
+            ..DpdkConfig::default()
+        };
         let src = DpdkSource::new(config);
         assert_eq!(src.config().rx_queue_id, 3);
         assert_eq!(src.config().burst_size, 16);

@@ -117,7 +117,12 @@ pub struct IoUringConfig {
 
 impl Default for IoUringConfig {
     fn default() -> Self {
-        Self { queue_depth: 256, registered_buffers: false, o_direct: false, inflight: 4 }
+        Self {
+            queue_depth: 256,
+            registered_buffers: false,
+            o_direct: false,
+            inflight: 4,
+        }
     }
 }
 

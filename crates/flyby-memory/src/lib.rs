@@ -36,8 +36,8 @@
 #![deny(missing_docs)]
 #![deny(rustdoc::broken_intra_doc_links)]
 
-mod ring;
 pub mod region;
+mod ring;
 pub mod slot;
 
 use std::marker::PhantomData;
@@ -142,8 +142,13 @@ impl<M: Message + Encode> Sink for SharedMemorySink<M> {
         let schema_id = message.schema_id().id();
         let flags = FLAG_VALID | if meta.suspect { FLAG_SUSPECT } else { 0 };
 
-        let header =
-            SlotHeader::new(schema_id, flags, meta.sequence, ts.as_nanos(), payload_len as u32);
+        let header = SlotHeader::new(
+            schema_id,
+            flags,
+            meta.sequence,
+            ts.as_nanos(),
+            payload_len as u32,
+        );
 
         let pushed = self.region.push(|buf| {
             // Encode payload into a temporary stack buffer then copy into
@@ -192,7 +197,10 @@ impl Message for StubMessage {
     }
 
     fn metadata(&self) -> flyby_core::Metadata {
-        flyby_core::Metadata { sequence: self.seq, suspect: false }
+        flyby_core::Metadata {
+            sequence: self.seq,
+            suspect: false,
+        }
     }
 }
 
@@ -203,7 +211,10 @@ impl Encode for StubMessage {
 
     fn encode_into(&self, dst: &mut [u8]) -> Result<usize> {
         if dst.len() < 8 {
-            return Err(Error::new(ErrorKind::Encode, "buffer too small for StubMessage"));
+            return Err(Error::new(
+                ErrorKind::Encode,
+                "buffer too small for StubMessage",
+            ));
         }
         dst[..8].copy_from_slice(&self.seq.to_be_bytes());
         Ok(8)

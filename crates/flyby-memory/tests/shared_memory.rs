@@ -12,8 +12,8 @@
 //! - Multiple messages with distinct schema IDs
 
 use flyby_core::Lifecycle;
-use flyby_memory::{SharedMemorySink, StubMessage, DEFAULT_MAX_PAYLOAD, DEFAULT_SLOT_COUNT};
 use flyby_core::Sink;
+use flyby_memory::{DEFAULT_MAX_PAYLOAD, DEFAULT_SLOT_COUNT, SharedMemorySink, StubMessage};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -65,17 +65,20 @@ fn sequence_numbers_are_monotonically_increasing() {
 #[test]
 fn full_ring_returns_error() {
     // Create a tiny sink: 4 slots
-    let mut sink = SharedMemorySink::<StubMessage>::new(4, DEFAULT_MAX_PAYLOAD)
-        .expect("sink");
+    let mut sink = SharedMemorySink::<StubMessage>::new(4, DEFAULT_MAX_PAYLOAD).expect("sink");
     sink.init().unwrap();
 
     // Fill all 4 slots
     for i in 0..4u64 {
-        sink.write(&StubMessage { seq: i }).expect("write should succeed");
+        sink.write(&StubMessage { seq: i })
+            .expect("write should succeed");
     }
     // 5th write should fail — ring is full
     let result = sink.write(&StubMessage { seq: 99 });
-    assert!(result.is_err(), "writing to a full ring should return an error");
+    assert!(
+        result.is_err(),
+        "writing to a full ring should return an error"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -85,11 +88,13 @@ fn full_ring_returns_error() {
 #[test]
 fn oversized_payload_returns_error() {
     // max_payload=4 but StubMessage encodes to 8 bytes
-    let mut sink = SharedMemorySink::<StubMessage>::new(16, 4)
-        .expect("sink");
+    let mut sink = SharedMemorySink::<StubMessage>::new(16, 4).expect("sink");
     sink.init().unwrap();
     let result = sink.write(&StubMessage { seq: 1 });
-    assert!(result.is_err(), "payload larger than max_payload should error");
+    assert!(
+        result.is_err(),
+        "payload larger than max_payload should error"
+    );
 }
 
 // ---------------------------------------------------------------------------

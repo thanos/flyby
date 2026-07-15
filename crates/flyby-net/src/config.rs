@@ -112,7 +112,10 @@ pub struct UmemConfig {
 
 impl Default for UmemConfig {
     fn default() -> Self {
-        Self { frame_size: 2048, frame_count: 4096 }
+        Self {
+            frame_size: 2048,
+            frame_count: 4096,
+        }
     }
 }
 

@@ -152,7 +152,11 @@ mod tests {
 
     #[test]
     fn config_is_accessible() {
-        let config = AfXdpConfig { interface: "eth1".into(), queue_id: 2, ..AfXdpConfig::default() };
+        let config = AfXdpConfig {
+            interface: "eth1".into(),
+            queue_id: 2,
+            ..AfXdpConfig::default()
+        };
         let src = AfXdpSource::new(config);
         assert_eq!(src.config().interface, "eth1");
         assert_eq!(src.config().queue_id, 2);

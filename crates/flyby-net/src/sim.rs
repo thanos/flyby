@@ -41,8 +41,8 @@ use crate::source::NetworkSource;
 
 // Fixed Ethernet/IP/UDP header sizes.
 const ETH_HEADER: usize = 14; // dst(6) + src(6) + ethertype(2)
-const IP_HEADER: usize = 20;  // minimal IPv4, no options
-const UDP_HEADER: usize = 8;  // src_port(2)+dst_port(2)+len(2)+checksum(2)
+const IP_HEADER: usize = 20; // minimal IPv4, no options
+const UDP_HEADER: usize = 8; // src_port(2)+dst_port(2)+len(2)+checksum(2)
 const NET_HEADER: usize = ETH_HEADER + IP_HEADER + UDP_HEADER;
 
 /// In-process simulated network source.
@@ -63,7 +63,12 @@ impl SimulatedNetSource {
         let frame_size = NET_HEADER + config.payload_size;
         let mut template = vec![0u8; frame_size];
         Self::fill_static_headers(&mut template, config.udp_dst_port, frame_size);
-        Self { config, sequence: 0, template, initialized: false }
+        Self {
+            config,
+            sequence: 0,
+            template,
+            initialized: false,
+        }
     }
 
     /// Write the static header fields into the template buffer.
@@ -87,8 +92,8 @@ impl SimulatedNetSource {
         // id=0, flags=0, frag_offset=0
         buf[18..20].copy_from_slice(&[0x00, 0x00]);
         buf[20..22].copy_from_slice(&[0x00, 0x00]);
-        buf[22] = 64;   // TTL
-        buf[23] = 17;   // proto = UDP
+        buf[22] = 64; // TTL
+        buf[23] = 17; // proto = UDP
         // checksum: 0 (intentionally invalid, simulator only)
         buf[24..26].copy_from_slice(&[0x00, 0x00]);
         // src IP: 192.168.1.1
@@ -111,8 +116,7 @@ impl SimulatedNetSource {
     /// Patch the sequence number into the payload area of `packet`.
     fn write_sequence(packet: &mut [u8], sequence: u64) {
         if packet.len() >= NET_HEADER + 8 {
-            packet[NET_HEADER..NET_HEADER + 8]
-                .copy_from_slice(&sequence.to_be_bytes());
+            packet[NET_HEADER..NET_HEADER + 8].copy_from_slice(&sequence.to_be_bytes());
         }
     }
 
@@ -162,8 +166,7 @@ impl NetworkSource for SimulatedNetSource {
         // We use the sequence number as a deterministic pseudo-random
         // input (fast, no RNG dependency).
         let idle_threshold = (self.config.idle_rate * u32::MAX as f32) as u32;
-        let pseudo = ((self.sequence.wrapping_mul(6364136223846793005))
-            >> 32) as u32;
+        let pseudo = ((self.sequence.wrapping_mul(6364136223846793005)) >> 32) as u32;
         if self.config.idle_rate > 0.0 && pseudo < idle_threshold {
             return Ok(0);
         }
@@ -173,8 +176,7 @@ impl NetworkSource for SimulatedNetSource {
 
         for _ in 0..n {
             // Simulate NIC drop: count but skip this packet.
-            let pseudo = ((self.sequence.wrapping_mul(6364136223846793005))
-                >> 32) as u32;
+            let pseudo = ((self.sequence.wrapping_mul(6364136223846793005)) >> 32) as u32;
             if self.config.drop_rate > 0.0 && pseudo < drop_threshold {
                 batch.dropped += 1;
                 self.sequence = self.sequence.wrapping_add(1);
@@ -224,7 +226,10 @@ mod tests {
 
     #[test]
     fn packets_have_correct_frame_size() {
-        let config = SimNetConfig { payload_size: 16, ..SimNetConfig::default() };
+        let config = SimNetConfig {
+            payload_size: 16,
+            ..SimNetConfig::default()
+        };
         let mut src = SimulatedNetSource::new(config);
         src.init().unwrap();
         let mut batch = make_batch();
@@ -269,7 +274,11 @@ mod tests {
 
     #[test]
     fn drop_rate_produces_dropped_count() {
-        let config = SimNetConfig { drop_rate: 0.5, batch_size: 64, ..SimNetConfig::default() };
+        let config = SimNetConfig {
+            drop_rate: 0.5,
+            batch_size: 64,
+            ..SimNetConfig::default()
+        };
         let mut src = SimulatedNetSource::new(config);
         src.init().unwrap();
         let mut batch = RawBatch::new(64, 2048);
@@ -293,7 +302,10 @@ mod tests {
 
     #[test]
     fn udp_dst_port_matches_config() {
-        let config = SimNetConfig { udp_dst_port: 9001, ..SimNetConfig::default() };
+        let config = SimNetConfig {
+            udp_dst_port: 9001,
+            ..SimNetConfig::default()
+        };
         let mut src = SimulatedNetSource::new(config);
         src.init().unwrap();
         let mut batch = make_batch();

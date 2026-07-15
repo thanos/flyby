@@ -167,9 +167,8 @@ fn custom_passthrough_always_returns_some() {
 #[test]
 fn custom_can_return_error() {
     use flyby_core::{Error, ErrorKind};
-    let mut f = CustomFramer::new(|_buf: &[u8]| {
-        Err(Error::new(ErrorKind::Decode, "corrupt magic"))
-    });
+    let mut f =
+        CustomFramer::new(|_buf: &[u8]| Err(Error::new(ErrorKind::Decode, "corrupt magic")));
     assert!(f.next_record_len(b"junk").is_err());
 }
 
@@ -180,7 +179,11 @@ fn custom_stateful_via_closure_captures() {
     let mut f = CustomFramer::new(move |buf: &[u8]| {
         let len = if toggle { 4 } else { 8 };
         toggle = !toggle;
-        if buf.len() >= len { Ok(Some(len)) } else { Ok(None) }
+        if buf.len() >= len {
+            Ok(Some(len))
+        } else {
+            Ok(None)
+        }
     });
     let buf = vec![0u8; 16];
     assert_eq!(f.next_record_len(&buf).unwrap(), Some(8));

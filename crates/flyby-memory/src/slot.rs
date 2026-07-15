@@ -126,7 +126,10 @@ impl SlotHeader {
 pub fn encode(header: &SlotHeader, payload: &[u8], dst: &mut [u8]) -> Result<()> {
     let needed = HEADER_SIZE + payload.len();
     if dst.len() < needed {
-        return Err(Error::new(ErrorKind::Encode, "destination buffer too small for slot"));
+        return Err(Error::new(
+            ErrorKind::Encode,
+            "destination buffer too small for slot",
+        ));
     }
     // SAFETY: see function-level safety comment.
     unsafe {
@@ -162,7 +165,10 @@ pub fn encode(header: &SlotHeader, payload: &[u8], dst: &mut [u8]) -> Result<()>
 ///   aliasing with any live reference.
 pub fn decode(src: &[u8]) -> Result<(SlotHeader, &[u8])> {
     if src.len() < HEADER_SIZE {
-        return Err(Error::new(ErrorKind::Decode, "buffer too small for slot header"));
+        return Err(Error::new(
+            ErrorKind::Decode,
+            "buffer too small for slot header",
+        ));
     }
     // SAFETY: see function-level safety comment.
     let header: SlotHeader = unsafe {
@@ -175,7 +181,10 @@ pub fn decode(src: &[u8]) -> Result<(SlotHeader, &[u8])> {
     }
     let payload_end = HEADER_SIZE + header.payload_len as usize;
     if src.len() < payload_end {
-        return Err(Error::new(ErrorKind::Decode, "buffer too small for slot payload"));
+        return Err(Error::new(
+            ErrorKind::Decode,
+            "buffer too small for slot payload",
+        ));
     }
     Ok((header, &src[HEADER_SIZE..payload_end]))
 }
@@ -195,8 +204,8 @@ mod tests {
 
     #[test]
     fn slot_size_rounds_to_cache_line() {
-        assert_eq!(slot_size(0), CACHE_LINE);   // 32 header → rounds to 64
-        assert_eq!(slot_size(32), CACHE_LINE);  // 32+32=64 → stays 64
+        assert_eq!(slot_size(0), CACHE_LINE); // 32 header → rounds to 64
+        assert_eq!(slot_size(32), CACHE_LINE); // 32+32=64 → stays 64
         assert_eq!(slot_size(33), 2 * CACHE_LINE); // 32+33=65 → rounds to 128
         assert_eq!(slot_size(96), 2 * CACHE_LINE); // 32+96=128 → stays 128
         assert_eq!(slot_size(97), 3 * CACHE_LINE); // 32+97=129 → rounds to 192

@@ -61,7 +61,9 @@ pub mod spdk;
 pub use batch::{RawRecordBatch, RecordMeta};
 pub use config::{EofPolicy, FileConfig, IoUringConfig, SpdkConfig};
 pub use file::FileSource;
-pub use framing::{Custom as CustomFramer, Delimiter, FixedLength, Frame, LengthPrefixed, PrefixWidth};
+pub use framing::{
+    Custom as CustomFramer, Delimiter, FixedLength, Frame, LengthPrefixed, PrefixWidth,
+};
 pub use metrics::StorageMetricKey;
 pub use replay::{ReplayEngine, ReplayMode};
 pub use source::StorageSource;

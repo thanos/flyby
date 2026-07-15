@@ -53,7 +53,14 @@ impl RawRecordBatch {
         let bufs = (0..capacity).map(|_| vec![0u8; max_record_size]).collect();
         let lens = vec![0usize; capacity];
         let meta = vec![RecordMeta::default(); capacity];
-        Self { bufs, lens, meta, count: 0, records_read: 0, parse_errors: 0 }
+        Self {
+            bufs,
+            lens,
+            meta,
+            count: 0,
+            records_read: 0,
+            parse_errors: 0,
+        }
     }
 
     /// Reset the batch for the next poll.
@@ -110,7 +117,11 @@ mod tests {
     #[test]
     fn push_and_iterate() {
         let mut batch = RawRecordBatch::new(4, 64);
-        let meta = RecordMeta { file_offset: 100, timestamp_ns: 1_000_000, record_index: 0 };
+        let meta = RecordMeta {
+            file_offset: 100,
+            timestamp_ns: 1_000_000,
+            record_index: 0,
+        };
         assert!(batch.push(b"hello", meta));
         assert_eq!(batch.len(), 1);
         assert_eq!(batch.records_read, 1);

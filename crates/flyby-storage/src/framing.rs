@@ -68,7 +68,11 @@ impl FixedLength {
 
 impl Frame for FixedLength {
     fn next_record_len(&mut self, buf: &[u8]) -> Result<Option<usize>> {
-        if buf.len() >= self.record_len { Ok(Some(self.record_len)) } else { Ok(None) }
+        if buf.len() >= self.record_len {
+            Ok(Some(self.record_len))
+        } else {
+            Ok(None)
+        }
     }
 }
 
@@ -133,11 +137,18 @@ impl Frame for LengthPrefixed {
         if payload_len > self.max_payload {
             return Err(Error::new(
                 flyby_core::ErrorKind::Decode,
-                format!("framing: payload length {payload_len} exceeds max {}", self.max_payload),
+                format!(
+                    "framing: payload length {payload_len} exceeds max {}",
+                    self.max_payload
+                ),
             ));
         }
         let total = header + payload_len;
-        if buf.len() >= total { Ok(Some(total)) } else { Ok(None) }
+        if buf.len() >= total {
+            Ok(Some(total))
+        } else {
+            Ok(None)
+        }
     }
 }
 
@@ -274,7 +285,11 @@ mod tests {
     fn custom_framer() {
         // Always returns records of 3 bytes
         let mut f = Custom::new(|buf: &[u8]| {
-            if buf.len() >= 3 { Ok(Some(3)) } else { Ok(None) }
+            if buf.len() >= 3 {
+                Ok(Some(3))
+            } else {
+                Ok(None)
+            }
         });
         assert_eq!(f.next_record_len(b"ab").unwrap(), None);
         assert_eq!(f.next_record_len(b"abc").unwrap(), Some(3));

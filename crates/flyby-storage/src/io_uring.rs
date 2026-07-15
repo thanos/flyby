@@ -74,7 +74,10 @@ pub struct IoUringSource {
 impl IoUringSource {
     /// Create a new io_uring source with the given configs.
     pub fn new(file_config: FileConfig, io_config: IoUringConfig) -> Self {
-        Self { file_config, io_config }
+        Self {
+            file_config,
+            io_config,
+        }
     }
 }
 

@@ -76,9 +76,17 @@ impl SpscRing {
         tail: NonNull<AtomicU64>,
         capacity: usize,
     ) -> Self {
-        debug_assert!(capacity.is_power_of_two(), "capacity must be a power of two");
+        debug_assert!(
+            capacity.is_power_of_two(),
+            "capacity must be a power of two"
+        );
         debug_assert!(capacity <= u64::MAX as usize / 2, "capacity too large");
-        Self { head, tail, capacity, mask: (capacity - 1) as u64 }
+        Self {
+            head,
+            tail,
+            capacity,
+            mask: (capacity - 1) as u64,
+        }
     }
 
     fn head(&self) -> &AtomicU64 {

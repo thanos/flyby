@@ -42,7 +42,7 @@ pub const REGION_VERSION: u16 = 1;
 // Fixed byte offsets of each section within the mmap.
 const HEADER_OFFSET: usize = 0;
 const HEADER_BYTES: usize = 64;
-const PRODUCER_OFFSET: usize = 64;  // head counter — one full cache line
+const PRODUCER_OFFSET: usize = 64; // head counter — one full cache line
 const CONSUMER_OFFSET: usize = 128; // tail counter — one full cache line
 /// Byte offset at which the first slot begins.
 pub const SLOTS_OFFSET: usize = 192;
@@ -53,15 +53,15 @@ pub const SLOTS_OFFSET: usize = 192;
 /// [`HEADER_BYTES`] bytes, verified by a compile-time assertion.
 #[repr(C)]
 struct RegionHeader {
-    magic:      u64,       // 8  — REGION_MAGIC
-    version:    u16,       // 2  — REGION_VERSION
-    flags:      u16,       // 2  — feature flags (reserved, must be 0)
-    _pad0:      u32,       // 4  — align slot_count to 8
-    slot_count: u32,       // 4
-    slot_size:  u32,       // 4  — bytes per slot including header + padding
-    _pad1:      [u8; 8],   // 8  — align region_id to 16
-    region_id:  u128,      // 16 — unique identifier (zero in v0.1)
-    _pad2:      [u8; 16],  // 16 — pad to 64 bytes
+    magic: u64,      // 8  — REGION_MAGIC
+    version: u16,    // 2  — REGION_VERSION
+    flags: u16,      // 2  — feature flags (reserved, must be 0)
+    _pad0: u32,      // 4  — align slot_count to 8
+    slot_count: u32, // 4
+    slot_size: u32,  // 4  — bytes per slot including header + padding
+    _pad1: [u8; 8],  // 8  — align region_id to 16
+    region_id: u128, // 16 — unique identifier (zero in v0.1)
+    _pad2: [u8; 16], // 16 — pad to 64 bytes
 }
 
 const _: () = assert!(
@@ -157,10 +157,7 @@ impl Region {
                 region_id: 0,
                 _pad2: [0; 16],
             };
-            core::ptr::write(
-                ptr.as_ptr().add(HEADER_OFFSET) as *mut RegionHeader,
-                header,
-            );
+            core::ptr::write(ptr.as_ptr().add(HEADER_OFFSET) as *mut RegionHeader, header);
         }
 
         // SAFETY:
@@ -170,16 +167,18 @@ impl Region {
         // - The mmap lives as long as `Region` (dropped in `Drop`), which
         //   is at least as long as `ring`.
         let ring = unsafe {
-            let head = NonNull::new_unchecked(
-                ptr.as_ptr().add(PRODUCER_OFFSET) as *mut AtomicU64,
-            );
-            let tail = NonNull::new_unchecked(
-                ptr.as_ptr().add(CONSUMER_OFFSET) as *mut AtomicU64,
-            );
+            let head = NonNull::new_unchecked(ptr.as_ptr().add(PRODUCER_OFFSET) as *mut AtomicU64);
+            let tail = NonNull::new_unchecked(ptr.as_ptr().add(CONSUMER_OFFSET) as *mut AtomicU64);
             SpscRing::new(head, tail, slot_count)
         };
 
-        Ok(Self { ptr, len, slot_count, slot_size, ring })
+        Ok(Self {
+            ptr,
+            len,
+            slot_count,
+            slot_size,
+            ring,
+        })
     }
 
     fn validate_params(slot_count: usize, slot_size: usize) -> Result<()> {
@@ -213,9 +212,7 @@ impl Region {
         // SAFETY: offset is within [SLOTS_OFFSET, SLOTS_OFFSET + slot_count*slot_size).
         // The mmap is valid for `self.len` bytes. `&mut self` ensures
         // no other reference to this memory exists simultaneously.
-        unsafe {
-            core::slice::from_raw_parts_mut(self.ptr.as_ptr().add(offset), self.slot_size)
-        }
+        unsafe { core::slice::from_raw_parts_mut(self.ptr.as_ptr().add(offset), self.slot_size) }
     }
 
     /// Returns an immutable byte slice for the slot at `index`.
@@ -223,9 +220,7 @@ impl Region {
         let offset = SLOTS_OFFSET + index * self.slot_size;
         // SAFETY: same bounds reasoning as slot_mut. `&self` ensures
         // no mutable reference to this memory exists simultaneously.
-        unsafe {
-            core::slice::from_raw_parts(self.ptr.as_ptr().add(offset), self.slot_size)
-        }
+        unsafe { core::slice::from_raw_parts(self.ptr.as_ptr().add(offset), self.slot_size) }
     }
 
     /// Write one slot into the ring.
@@ -308,7 +303,7 @@ impl Drop for Region {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::slot::{self as s, SlotHeader, FLAG_VALID, HEADER_SIZE};
+    use crate::slot::{self as s, FLAG_VALID, HEADER_SIZE, SlotHeader};
 
     fn default_region() -> Region {
         Region::anonymous(8, s::slot_size(64)).unwrap()

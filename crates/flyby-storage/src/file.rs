@@ -102,9 +102,10 @@ impl<F: Frame> FileSource<F> {
     // Fill `read_buf` by appending up to READ_CHUNK bytes from the file.
     // Returns Ok(true) if bytes were appended, Ok(false) at EOF.
     fn fill_buf(&mut self) -> Result<bool> {
-        let file = self.file.as_mut().ok_or_else(|| {
-            Error::new(ErrorKind::Lifecycle, "FileSource: not initialized")
-        })?;
+        let file = self
+            .file
+            .as_mut()
+            .ok_or_else(|| Error::new(ErrorKind::Lifecycle, "FileSource: not initialized"))?;
 
         let prev_len = self.read_buf.len();
         self.read_buf.resize(prev_len + READ_CHUNK, 0);
@@ -157,7 +158,10 @@ impl<F: Frame> FileSource<F> {
 impl<F: Frame> Lifecycle for FileSource<F> {
     fn init(&mut self) -> Result<()> {
         let file = File::open(&self.config.path).map_err(|e| {
-            Error::new(ErrorKind::Io, format!("FileSource: cannot open {:?}: {e}", self.config.path))
+            Error::new(
+                ErrorKind::Io,
+                format!("FileSource: cannot open {:?}: {e}", self.config.path),
+            )
         })?;
         self.file = Some(file);
         self.read_buf.clear();
@@ -244,7 +248,10 @@ mod tests {
         tmp.write_all(data).unwrap();
         tmp.flush().unwrap();
         let path = tmp.path().to_path_buf();
-        let cfg = FileConfig { path, ..FileConfig::default() };
+        let cfg = FileConfig {
+            path,
+            ..FileConfig::default()
+        };
         (tmp, cfg)
     }
 

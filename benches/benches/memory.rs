@@ -11,8 +11,8 @@
 //! benchmark evidence).
 
 use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main};
-use flyby_memory::{SharedMemorySink, StubMessage, slot};
 use flyby_core::Sink;
+use flyby_memory::{SharedMemorySink, StubMessage, slot};
 
 // ---------------------------------------------------------------------------
 // Throughput: messages per second through push→pop.
@@ -27,8 +27,7 @@ fn bench_throughput(c: &mut Criterion) {
             BenchmarkId::from_parameter(slot_count),
             &slot_count,
             |b, &n| {
-                let mut sink: SharedMemorySink<StubMessage> =
-                    SharedMemorySink::new(n, 64).unwrap();
+                let mut sink: SharedMemorySink<StubMessage> = SharedMemorySink::new(n, 64).unwrap();
                 b.iter(|| {
                     // fill
                     for i in 0..n as u64 {
@@ -36,7 +35,9 @@ fn bench_throughput(c: &mut Criterion) {
                     }
                     // drain
                     for _ in 0..n {
-                        sink.pop(|buf| { black_box(buf); });
+                        sink.pop(|buf| {
+                            black_box(buf);
+                        });
                     }
                 });
             },
@@ -56,7 +57,9 @@ fn bench_latency(c: &mut Criterion) {
     group.bench_function("single_push_pop", |b| {
         b.iter(|| {
             sink.write(black_box(&StubMessage { seq: 0 })).unwrap();
-            sink.pop(|buf| { black_box(buf); });
+            sink.pop(|buf| {
+                black_box(buf);
+            });
         });
     });
     group.finish();
@@ -81,7 +84,9 @@ fn bench_slot_size(c: &mut Criterion) {
                         sink.write(&StubMessage { seq: i }).unwrap();
                     }
                     for _ in 0..256 {
-                        sink.pop(|buf| { black_box(buf); });
+                        sink.pop(|buf| {
+                            black_box(buf);
+                        });
                     }
                 });
             },

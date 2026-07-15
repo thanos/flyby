@@ -34,7 +34,10 @@ fn write_file(data: &[u8]) -> (NamedTempFile, PathBuf) {
 }
 
 fn make_config(path: PathBuf) -> FileConfig {
-    FileConfig { path, ..FileConfig::default() }
+    FileConfig {
+        path,
+        ..FileConfig::default()
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -71,7 +74,11 @@ fn fixed_splits_across_multiple_polls() {
         data.extend_from_slice(&record);
     }
     let (_tmp, path) = write_file(&data);
-    let cfg = FileConfig { path, batch_size: 4, ..FileConfig::default() };
+    let cfg = FileConfig {
+        path,
+        batch_size: 4,
+        ..FileConfig::default()
+    };
     let mut src = FileSource::new(cfg, FixedLength::new(8));
     src.init().unwrap();
 
@@ -173,8 +180,7 @@ fn length_prefixed_reads_variable_records() {
     data.extend_from_slice(b"bye");
 
     let (_tmp, path) = write_file(&data);
-    let mut src =
-        FileSource::new(make_config(path), LengthPrefixed::new(PrefixWidth::U8, 64));
+    let mut src = FileSource::new(make_config(path), LengthPrefixed::new(PrefixWidth::U8, 64));
     src.init().unwrap();
 
     let mut batch = RawRecordBatch::new(8, 128);
@@ -209,7 +215,11 @@ fn eof_stop_marks_exhausted() {
 #[test]
 fn eof_loop_does_not_exhaust() {
     let (_tmp, path) = write_file(b"RECORD__"); // 1 record
-    let cfg = FileConfig { path, eof_policy: EofPolicy::Loop, ..FileConfig::default() };
+    let cfg = FileConfig {
+        path,
+        eof_policy: EofPolicy::Loop,
+        ..FileConfig::default()
+    };
     let mut src = FileSource::new(cfg, FixedLength::new(8));
     src.init().unwrap();
 
@@ -226,7 +236,11 @@ fn eof_loop_does_not_exhaust() {
 #[test]
 fn eof_loop_loop_count_tracks_rewinds() {
     let (_tmp, path) = write_file(b"RECORD__"); // 1 record
-    let cfg = FileConfig { path, eof_policy: EofPolicy::Loop, ..FileConfig::default() };
+    let cfg = FileConfig {
+        path,
+        eof_policy: EofPolicy::Loop,
+        ..FileConfig::default()
+    };
     let mut src = FileSource::new(cfg, FixedLength::new(8));
     src.init().unwrap();
 
@@ -293,12 +307,14 @@ fn corrupt_length_prefix_exceeding_max_returns_error() {
     // U8 prefix says 200 bytes but max is 10 — should return an error
     let data = vec![200u8, 0, 0, 0, 0]; // 200 > max_payload
     let (_tmp, path) = write_file(&data);
-    let mut src =
-        FileSource::new(make_config(path), LengthPrefixed::new(PrefixWidth::U8, 10));
+    let mut src = FileSource::new(make_config(path), LengthPrefixed::new(PrefixWidth::U8, 10));
     src.init().unwrap();
 
     let mut batch = RawRecordBatch::new(4, 256);
-    assert!(src.poll_batch(&mut batch).is_err(), "oversized payload should be an error");
+    assert!(
+        src.poll_batch(&mut batch).is_err(),
+        "oversized payload should be an error"
+    );
 }
 
 #[test]
@@ -310,7 +326,10 @@ fn corrupt_delimiter_record_exceeding_max_returns_error() {
     src.init().unwrap();
 
     let mut batch = RawRecordBatch::new(4, 256);
-    assert!(src.poll_batch(&mut batch).is_err(), "record exceeding max_len should be an error");
+    assert!(
+        src.poll_batch(&mut batch).is_err(),
+        "record exceeding max_len should be an error"
+    );
 }
 
 // ---------------------------------------------------------------------------

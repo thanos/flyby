@@ -94,8 +94,11 @@ fn bench_file_throughput(c: &mut Criterion) {
 fn bench_file_latency(c: &mut Criterion) {
     let record_size = 64usize;
     let tmp = make_file(record_size, 10_000);
-    let cfg =
-        FileConfig { path: tmp.path().to_path_buf(), batch_size: 1, ..FileConfig::default() };
+    let cfg = FileConfig {
+        path: tmp.path().to_path_buf(),
+        batch_size: 1,
+        ..FileConfig::default()
+    };
     let mut src = FileSource::new(cfg, FixedLength::new(record_size));
     src.init().unwrap();
     let mut batch = RawRecordBatch::new(1, record_size + 8);
@@ -151,5 +154,10 @@ fn bench_file_batch_size(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, bench_file_throughput, bench_file_latency, bench_file_batch_size,);
+criterion_group!(
+    benches,
+    bench_file_throughput,
+    bench_file_latency,
+    bench_file_batch_size,
+);
 criterion_main!(benches);

@@ -67,7 +67,14 @@ impl RawBatch {
         let bufs = (0..capacity).map(|_| vec![0u8; max_frame_size]).collect();
         let lens = vec![0usize; capacity];
         let meta = vec![PacketMeta::default(); capacity];
-        Self { bufs, lens, meta, count: 0, received: 0, dropped: 0 }
+        Self {
+            bufs,
+            lens,
+            meta,
+            count: 0,
+            received: 0,
+            dropped: 0,
+        }
     }
 
     /// Reset the batch for the next poll.
@@ -127,7 +134,11 @@ mod tests {
     #[test]
     fn push_and_iterate() {
         let mut batch = RawBatch::new(4, 64);
-        let meta = PacketMeta { timestamp_ns: 1000, queue_id: 0, original_len: 10 };
+        let meta = PacketMeta {
+            timestamp_ns: 1000,
+            queue_id: 0,
+            original_len: 10,
+        };
         assert!(batch.push(b"hello", meta));
         assert_eq!(batch.len(), 1);
         assert_eq!(batch.received, 1);

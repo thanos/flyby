@@ -38,7 +38,10 @@ fn default_batch(n: usize) -> RawBatch {
 
 #[test]
 fn batch_contains_configured_packet_count() {
-    let cfg = SimNetConfig { batch_size: 16, ..SimNetConfig::default() };
+    let cfg = SimNetConfig {
+        batch_size: 16,
+        ..SimNetConfig::default()
+    };
     let mut src = make_src(cfg);
     src.init().unwrap();
     let mut batch = default_batch(32);
@@ -48,7 +51,10 @@ fn batch_contains_configured_packet_count() {
 
 #[test]
 fn batch_size_one_yields_single_packet() {
-    let cfg = SimNetConfig { batch_size: 1, ..SimNetConfig::default() };
+    let cfg = SimNetConfig {
+        batch_size: 1,
+        ..SimNetConfig::default()
+    };
     let mut src = make_src(cfg);
     src.init().unwrap();
     let mut batch = default_batch(8);
@@ -63,45 +69,69 @@ fn batch_size_one_yields_single_packet() {
 #[test]
 fn packet_total_length_equals_header_plus_payload() {
     let payload = 32usize;
-    let cfg = SimNetConfig { payload_size: payload, batch_size: 4, ..SimNetConfig::default() };
+    let cfg = SimNetConfig {
+        payload_size: payload,
+        batch_size: 4,
+        ..SimNetConfig::default()
+    };
     let mut src = make_src(cfg);
     src.init().unwrap();
     let mut batch = default_batch(8);
     src.poll_batch(&mut batch).unwrap();
 
     for (data, _meta) in batch.packets() {
-        assert_eq!(data.len(), NET_HEADER + payload,
-            "frame = 42 header bytes + {payload} payload bytes");
+        assert_eq!(
+            data.len(),
+            NET_HEADER + payload,
+            "frame = 42 header bytes + {payload} payload bytes"
+        );
     }
 }
 
 #[test]
 fn ethernet_dst_is_broadcast() {
-    let cfg = SimNetConfig { batch_size: 1, ..SimNetConfig::default() };
+    let cfg = SimNetConfig {
+        batch_size: 1,
+        ..SimNetConfig::default()
+    };
     let mut src = make_src(cfg);
     src.init().unwrap();
     let mut batch = default_batch(4);
     src.poll_batch(&mut batch).unwrap();
 
     let (data, _) = batch.packets().next().unwrap();
-    assert_eq!(&data[0..6], &[0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF], "dst must be broadcast");
+    assert_eq!(
+        &data[0..6],
+        &[0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF],
+        "dst must be broadcast"
+    );
 }
 
 #[test]
 fn ethernet_src_is_fixed() {
-    let cfg = SimNetConfig { batch_size: 1, ..SimNetConfig::default() };
+    let cfg = SimNetConfig {
+        batch_size: 1,
+        ..SimNetConfig::default()
+    };
     let mut src = make_src(cfg);
     src.init().unwrap();
     let mut batch = default_batch(4);
     src.poll_batch(&mut batch).unwrap();
 
     let (data, _) = batch.packets().next().unwrap();
-    assert_eq!(&data[6..12], &[0x02, 0x00, 0x00, 0x00, 0x00, 0x01], "fixed src MAC");
+    assert_eq!(
+        &data[6..12],
+        &[0x02, 0x00, 0x00, 0x00, 0x00, 0x01],
+        "fixed src MAC"
+    );
 }
 
 #[test]
 fn ethertype_is_ipv4() {
-    let cfg = SimNetConfig { batch_size: 1, ..SimNetConfig::default() };
+    let cfg = SimNetConfig {
+        batch_size: 1,
+        ..SimNetConfig::default()
+    };
     let mut src = make_src(cfg);
     src.init().unwrap();
     let mut batch = default_batch(4);
@@ -117,7 +147,11 @@ fn ethertype_is_ipv4() {
 
 #[test]
 fn sequence_numbers_increase_across_polls() {
-    let cfg = SimNetConfig { batch_size: 4, payload_size: 8, ..SimNetConfig::default() };
+    let cfg = SimNetConfig {
+        batch_size: 4,
+        payload_size: 8,
+        ..SimNetConfig::default()
+    };
     let mut src = make_src(cfg);
     src.init().unwrap();
 
@@ -126,15 +160,17 @@ fn sequence_numbers_increase_across_polls() {
         let mut batch = default_batch(8);
         src.poll_batch(&mut batch).unwrap();
         for (data, _) in batch.packets() {
-            let seq =
-                u64::from_be_bytes(data[NET_HEADER..NET_HEADER + 8].try_into().unwrap());
+            let seq = u64::from_be_bytes(data[NET_HEADER..NET_HEADER + 8].try_into().unwrap());
             all_seqs.push(seq);
         }
     }
 
     // Sequences must be strictly increasing
     for window in all_seqs.windows(2) {
-        assert!(window[1] > window[0], "sequence numbers must be strictly increasing");
+        assert!(
+            window[1] > window[0],
+            "sequence numbers must be strictly increasing"
+        );
     }
 }
 
@@ -155,7 +191,10 @@ fn nonzero_drop_rate_produces_drops_over_many_polls() {
 
     let n = src.poll_batch(&mut batch).unwrap();
     // With 90% drop, fewer than 64 packets should be present
-    assert!(n < 64, "90% drop rate should produce fewer than 64 packets, got {n}");
+    assert!(
+        n < 64,
+        "90% drop rate should produce fewer than 64 packets, got {n}"
+    );
     assert!(batch.dropped > 0, "dropped counter should be non-zero");
 }
 
@@ -187,7 +226,10 @@ fn uninitialized_source_poll_returns_error() {
 
 #[test]
 fn shutdown_prevents_further_polls() {
-    let cfg = SimNetConfig { batch_size: 4, ..SimNetConfig::default() };
+    let cfg = SimNetConfig {
+        batch_size: 4,
+        ..SimNetConfig::default()
+    };
     let mut src = make_src(cfg);
     src.init().unwrap();
 
@@ -196,12 +238,18 @@ fn shutdown_prevents_further_polls() {
 
     src.shutdown().unwrap();
     batch.reset(2048);
-    assert!(src.poll_batch(&mut batch).is_err(), "post-shutdown poll must fail");
+    assert!(
+        src.poll_batch(&mut batch).is_err(),
+        "post-shutdown poll must fail"
+    );
 }
 
 #[test]
 fn reinit_after_shutdown_works() {
-    let cfg = SimNetConfig { batch_size: 2, ..SimNetConfig::default() };
+    let cfg = SimNetConfig {
+        batch_size: 2,
+        ..SimNetConfig::default()
+    };
     let mut src = make_src(cfg);
     src.init().unwrap();
     let mut batch = default_batch(4);
@@ -221,7 +269,10 @@ fn reinit_after_shutdown_works() {
 
 #[test]
 fn backend_name_is_sim() {
-    let cfg = SimNetConfig { batch_size: 1, ..SimNetConfig::default() };
+    let cfg = SimNetConfig {
+        batch_size: 1,
+        ..SimNetConfig::default()
+    };
     let mut src = SimulatedNetSource::new(cfg);
     src.init().unwrap();
     assert_eq!(src.backend_name(), "simulator");

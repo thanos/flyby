@@ -92,7 +92,10 @@ impl Lifecycle for SpdkSource {
 
 impl StorageSource for SpdkSource {
     fn poll_batch(&mut self, _batch: &mut RawRecordBatch) -> Result<usize> {
-        Err(Error::new(ErrorKind::FeatureNotEnabled, "SPDK backend: not yet implemented"))
+        Err(Error::new(
+            ErrorKind::FeatureNotEnabled,
+            "SPDK backend: not yet implemented",
+        ))
     }
 
     fn backend_name() -> &'static str {
