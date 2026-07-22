@@ -58,7 +58,7 @@ pub mod spdk;
 // Flat re-exports for the most commonly used types.
 // ---------------------------------------------------------------------------
 
-pub use batch::{RawRecordBatch, RecordMeta};
+pub use batch::{PushResult, RawRecordBatch, RecordMeta};
 pub use config::{EofPolicy, FileConfig, IoUringConfig, SpdkConfig};
 pub use file::FileSource;
 pub use framing::{

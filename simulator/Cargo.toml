@@ -7,14 +7,19 @@ license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 authors.workspace = true
-description = "In-process simulator source for the FlyBy framework."
+description = "First-class FlyBy simulator: virtual NICs, storage, scenarios, and deterministic replay."
 publish = false
 
 [features]
 default = []
 
 [dependencies]
-flyby-core = { workspace = true }
+flyby-core    = { workspace = true }
+flyby-net     = { workspace = true }
+flyby-storage = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3"
 
 [[bin]]
 name = "flyby-sim"

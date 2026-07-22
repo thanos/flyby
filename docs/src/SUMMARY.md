@@ -46,3 +46,5 @@
   - [ADR-0004: Copy mode before zero-copy](./adr/0004-copy-mode-before-zero-copy.md)
   - [ADR-0005: File reader before io_uring](./adr/0005-file-before-io-uring.md)
   - [ADR-0006: io_uring before SPDK](./adr/0006-io-uring-before-spdk.md)
+  - [ADR-0007: Simulator before hardware](./adr/0007-simulator-before-hardware.md)
+  - [ADR-0008: Simulator is a product feature](./adr/0008-simulator-is-a-product-feature.md)
