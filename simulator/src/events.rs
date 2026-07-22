@@ -211,7 +211,12 @@ mod tests {
     #[test]
     fn null_sink_accepts_any_event() {
         let sink = NullEventSink;
-        sink.emit(SimEvent { clock_ns: 0, kind: SimEventKind::SimulatorStarted { scenario: "test".into() } });
+        sink.emit(SimEvent {
+            clock_ns: 0,
+            kind: SimEventKind::SimulatorStarted {
+                scenario: "test".into(),
+            },
+        });
         // no panic = pass
     }
 
@@ -221,11 +226,18 @@ mod tests {
         assert!(sink.is_empty());
         sink.emit(SimEvent {
             clock_ns: 100,
-            kind: SimEventKind::PacketGenerated { nic: "nic0", len: 64, seq: 1 },
+            kind: SimEventKind::PacketGenerated {
+                nic: "nic0",
+                len: 64,
+                seq: 1,
+            },
         });
         sink.emit(SimEvent {
             clock_ns: 200,
-            kind: SimEventKind::PacketDropped { nic: "nic0", seq: 2 },
+            kind: SimEventKind::PacketDropped {
+                nic: "nic0",
+                seq: 2,
+            },
         });
         assert_eq!(sink.len(), 2);
     }
@@ -236,7 +248,10 @@ mod tests {
         for i in 0..5u64 {
             sink.emit(SimEvent {
                 clock_ns: i * 1000,
-                kind: SimEventKind::TickCompleted { tick: i + 1, duration_ns: 100 },
+                kind: SimEventKind::TickCompleted {
+                    tick: i + 1,
+                    duration_ns: 100,
+                },
             });
         }
         let events = sink.events();
@@ -249,7 +264,10 @@ mod tests {
     fn vec_sink_is_clonable_and_shared() {
         let sink = VecEventSink::new();
         let sink2 = sink.clone();
-        sink.emit(SimEvent { clock_ns: 1, kind: SimEventKind::QueueOverflow { ring: "r0" } });
+        sink.emit(SimEvent {
+            clock_ns: 1,
+            kind: SimEventKind::QueueOverflow { ring: "r0" },
+        });
         // Both handles see the same underlying vec
         assert_eq!(sink2.len(), 1);
     }

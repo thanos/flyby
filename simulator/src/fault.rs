@@ -38,16 +38,19 @@ pub struct FaultSpec {
 
 impl Default for FaultSpec {
     fn default() -> Self {
-        Self { drop_rate: 0.0, corrupt_rate: 0.0, latency_spike_rate: 0.0, latency_spike_ns: 0 }
+        Self {
+            drop_rate: 0.0,
+            corrupt_rate: 0.0,
+            latency_spike_rate: 0.0,
+            latency_spike_ns: 0,
+        }
     }
 }
 
 impl FaultSpec {
     /// `true` if this spec injects no faults at all.
     pub fn is_clean(&self) -> bool {
-        self.drop_rate == 0.0
-            && self.corrupt_rate == 0.0
-            && self.latency_spike_rate == 0.0
+        self.drop_rate == 0.0 && self.corrupt_rate == 0.0 && self.latency_spike_rate == 0.0
     }
 }
 
@@ -128,7 +131,10 @@ impl FaultInjector {
 
     fn next_state(&mut self) -> u64 {
         // Knuth multiplicative LCG (same constants as SimulatedNetSource)
-        self.state = self.state.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1);
+        self.state = self
+            .state
+            .wrapping_mul(6_364_136_223_846_793_005)
+            .wrapping_add(1);
         self.state
     }
 }
@@ -152,7 +158,10 @@ mod tests {
 
     #[test]
     fn full_drop_rate_always_drops() {
-        let spec = FaultSpec { drop_rate: 1.0, ..FaultSpec::default() };
+        let spec = FaultSpec {
+            drop_rate: 1.0,
+            ..FaultSpec::default()
+        };
         let mut inj = FaultInjector::new(spec, 0);
         for _ in 0..100 {
             assert!(inj.should_drop());
@@ -161,10 +170,16 @@ mod tests {
 
     #[test]
     fn partial_drop_rate_produces_some_drops() {
-        let spec = FaultSpec { drop_rate: 0.5, ..FaultSpec::default() };
+        let spec = FaultSpec {
+            drop_rate: 0.5,
+            ..FaultSpec::default()
+        };
         let mut inj = FaultInjector::new(spec, 1);
         let drops: usize = (0..1000).filter(|_| inj.should_drop()).count();
-        assert!(drops > 200 && drops < 800, "expected ~500 drops, got {drops}");
+        assert!(
+            drops > 200 && drops < 800,
+            "expected ~500 drops, got {drops}"
+        );
     }
 
     #[test]
@@ -174,13 +189,21 @@ mod tests {
         let mut payload = original.clone();
         inj.corrupt_payload(&mut payload);
         assert_ne!(payload, original, "corruption should change the payload");
-        let diffs = payload.iter().zip(original.iter()).filter(|(a, b)| a != b).count();
+        let diffs = payload
+            .iter()
+            .zip(original.iter())
+            .filter(|(a, b)| a != b)
+            .count();
         assert_eq!(diffs, 1, "exactly one byte should be flipped");
     }
 
     #[test]
     fn determinism_same_seed_same_decisions() {
-        let spec = FaultSpec { drop_rate: 0.3, corrupt_rate: 0.1, ..FaultSpec::default() };
+        let spec = FaultSpec {
+            drop_rate: 0.3,
+            corrupt_rate: 0.1,
+            ..FaultSpec::default()
+        };
         let decisions_a: Vec<bool> = {
             let mut inj = FaultInjector::new(spec.clone(), 99);
             (0..100).map(|_| inj.should_drop()).collect()
@@ -189,12 +212,18 @@ mod tests {
             let mut inj = FaultInjector::new(spec, 99);
             (0..100).map(|_| inj.should_drop()).collect()
         };
-        assert_eq!(decisions_a, decisions_b, "same seed must produce same decisions");
+        assert_eq!(
+            decisions_a, decisions_b,
+            "same seed must produce same decisions"
+        );
     }
 
     #[test]
     fn different_seeds_produce_different_decisions() {
-        let spec = FaultSpec { drop_rate: 0.5, ..FaultSpec::default() };
+        let spec = FaultSpec {
+            drop_rate: 0.5,
+            ..FaultSpec::default()
+        };
         let a: Vec<bool> = {
             let mut inj = FaultInjector::new(spec.clone(), 1);
             (0..50).map(|_| inj.should_drop()).collect()

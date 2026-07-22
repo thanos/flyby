@@ -23,9 +23,7 @@
 
 use std::sync::Arc;
 
-use flyby_core::{
-    Error, ErrorKind, Lifecycle, MetricsCollector, NullCollector, Result,
-};
+use flyby_core::{Error, ErrorKind, Lifecycle, MetricsCollector, NullCollector, Result};
 use flyby_net::{NetworkSource, PushResult, RawBatch, SimNetConfig, SimulatedNetSource};
 
 use crate::events::{EventSink, SimEvent, SimEventKind};
@@ -451,5 +449,4 @@ mod tests {
         nic.init().unwrap();
         assert_eq!(nic.packets_generated, 0);
     }
-
 }

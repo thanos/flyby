@@ -18,8 +18,8 @@
 //! Results are **simulated** and must not be quoted as hardware benchmarks.
 
 use flyby_simulator::{
-    events::NullEventSink, FaultSpec, Scenario, SimScheduler, TrafficConfig, VirtualConsumer,
-    VirtualNic, VirtualNicConfig, VirtualSharedMemory,
+    FaultSpec, Scenario, SimScheduler, TrafficConfig, VirtualConsumer, VirtualNic,
+    VirtualNicConfig, VirtualSharedMemory, events::NullEventSink,
 };
 
 fn main() {
@@ -43,7 +43,10 @@ fn main() {
         }
     };
 
-    println!("Running scenario '{}': {}", scenario.name, scenario.description);
+    println!(
+        "Running scenario '{}': {}",
+        scenario.name, scenario.description
+    );
     println!("  Duration : {:?}", scenario.duration);
     println!("  Tick     : {} µs", scenario.tick_ns / 1_000);
     println!("  Traffic  : {:?}", scenario.traffic.pattern);
@@ -81,11 +84,8 @@ fn main() {
     let ring_slots = if is_overflow { 16 } else { 4096 };
     let frame = 42 + scenario.traffic.payload_size.max(1);
 
-    let mut sched = SimScheduler::new(scenario).with_ring(VirtualSharedMemory::new(
-        "ring0",
-        ring_slots,
-        frame,
-    ));
+    let mut sched =
+        SimScheduler::new(scenario).with_ring(VirtualSharedMemory::new("ring0", ring_slots, frame));
     sched.add_nic(nic);
     if is_slow {
         sched.add_consumer(VirtualConsumer::slow("c0", 1));
@@ -107,7 +107,10 @@ fn main() {
             println!("  Wall-clock time   : {:?}", stats.elapsed);
             if stats.elapsed.as_secs_f64() > 0.0 {
                 let pps = stats.packets_generated as f64 / stats.elapsed.as_secs_f64();
-                println!("  Throughput        : {:.0} pps (wall-clock, simulated)", pps);
+                println!(
+                    "  Throughput        : {:.0} pps (wall-clock, simulated)",
+                    pps
+                );
             }
         }
         Err(e) => {

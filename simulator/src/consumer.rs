@@ -1,4 +1,4 @@
-//! Virtual consumers that drain a [`VirtualSharedMemory`][crate::ring::VirtualSharedMemory] ring.
+//! Virtual consumers that drain a [`VirtualSharedMemory`] ring.
 //!
 //! Models the production shared-memory consumer side inside the simulator
 //! without requiring IPC.  Consumers can be slowed (drain fewer slots per

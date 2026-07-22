@@ -2,8 +2,9 @@
 //!
 //! Part VI requires replay options (original timestamps, accelerated, slowed,
 //! paused, single-step).  The storage crate already owns [`ReplayMode`] and
-//! [`ReplayEngine`]; this module adapts them to the simulator's virtual clock
-//! so deterministic scenarios do not depend on wall-clock `sleep`.
+//! [`ReplayEngine`][flyby_storage::ReplayEngine]; this module adapts them to
+//! the simulator's virtual clock so deterministic scenarios do not depend on
+//! wall-clock `sleep`.
 //!
 //! ## Virtual-clock modes
 //!

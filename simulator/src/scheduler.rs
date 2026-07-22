@@ -3,7 +3,8 @@
 //! [`SimScheduler`] is the execution engine for a [`Scenario`].  It:
 //!
 //! 1. Advances virtual (or real) time one tick at a time.
-//! 2. Calls `poll_batch` on all registered [`VirtualNic`]s (with tick pacing).
+//! 2. Calls `poll_batch` on all registered [`VirtualNic`][crate::nic::VirtualNic]s
+//!    (with tick pacing).
 //! 3. Optionally pushes delivered packets into a [`VirtualSharedMemory`] ring
 //!    and drains [`VirtualConsumer`]s.
 //! 4. Accumulates counters into [`SimStats`] and records metrics.
@@ -321,8 +322,7 @@ impl<E: EventSink> SimScheduler<E> {
                 }
             }
             let occ = ring.occupancy();
-            self.metrics
-                .record_gauge(&SimMetricKey::RingOccupancy, occ);
+            self.metrics.record_gauge(&SimMetricKey::RingOccupancy, occ);
             self.metrics
                 .record_gauge(&SimMetricKey::QueueOccupancy, occ);
         }
@@ -588,11 +588,8 @@ mod tests {
             clock_mode: ClockMode::Virtual { start_ns: 0 },
             ..Scenario::default()
         };
-        let mut sched = SimScheduler::new(scenario.clone()).with_ring(VirtualSharedMemory::new(
-            "ring0",
-            64,
-            128,
-        ));
+        let mut sched = SimScheduler::new(scenario.clone())
+            .with_ring(VirtualSharedMemory::new("ring0", 64, 128));
         sched.add_nic(make_nic(8));
         sched.add_consumer(VirtualConsumer::new("c0"));
         let stats = sched.run().unwrap();

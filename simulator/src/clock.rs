@@ -61,7 +61,11 @@ impl SimClock {
             ClockMode::Virtual { start_ns } => *start_ns,
             ClockMode::RealTime => 0,
         };
-        Self { mode, virtual_ns, real_start: Instant::now() }
+        Self {
+            mode,
+            virtual_ns,
+            real_start: Instant::now(),
+        }
     }
 
     /// Current time in nanoseconds.
@@ -70,9 +74,7 @@ impl SimClock {
     /// In virtual mode this is the accumulated virtual time.
     pub fn now_ns(&self) -> u64 {
         match self.mode {
-            ClockMode::RealTime => {
-                self.real_start.elapsed().as_nanos() as u64
-            }
+            ClockMode::RealTime => self.real_start.elapsed().as_nanos() as u64,
             ClockMode::Virtual { .. } => self.virtual_ns,
         }
     }
@@ -117,7 +119,9 @@ mod tests {
 
     #[test]
     fn virtual_clock_starts_at_given_time() {
-        let c = SimClock::new(ClockMode::Virtual { start_ns: 1_000_000 });
+        let c = SimClock::new(ClockMode::Virtual {
+            start_ns: 1_000_000,
+        });
         assert_eq!(c.now_ns(), 1_000_000);
     }
 
@@ -154,7 +158,10 @@ mod tests {
         c.advance(Duration::from_secs(100)); // no effect
         let after = c.now_ns();
         // Real-time should not jump by 100 seconds; virtual_ns unchanged
-        assert!(after - before < 1_000_000_000, "real-time advance should be a no-op");
+        assert!(
+            after - before < 1_000_000_000,
+            "real-time advance should be a no-op"
+        );
     }
 
     #[test]

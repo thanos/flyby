@@ -24,10 +24,10 @@
 //! println!("Running: {} — {}", s.name, s.description);
 //! ```
 
-use std::time::Duration;
 use crate::clock::ClockMode;
 use crate::fault::FaultSpec;
 use crate::traffic::TrafficConfig;
+use std::time::Duration;
 
 /// A complete simulation scenario.
 ///
@@ -134,7 +134,10 @@ impl Scenario {
                 payload_size: 8,
                 batch_size: 64,
             },
-            fault: FaultSpec { drop_rate: 0.05, ..FaultSpec::default() },
+            fault: FaultSpec {
+                drop_rate: 0.05,
+                ..FaultSpec::default()
+            },
             duration: Duration::from_secs(10),
             clock_mode: ClockMode::Virtual { start_ns: 0 },
             tick_ns: 1_000_000,
@@ -177,7 +180,10 @@ impl Scenario {
                 payload_size: 32,
                 batch_size: 16,
             },
-            fault: FaultSpec { corrupt_rate: 0.01, ..FaultSpec::default() },
+            fault: FaultSpec {
+                corrupt_rate: 0.01,
+                ..FaultSpec::default()
+            },
             duration: Duration::from_secs(1),
             clock_mode: ClockMode::Virtual { start_ns: 0 },
             tick_ns: 1_000_000,
@@ -221,7 +227,10 @@ mod tests {
         ];
         for s in &scenarios {
             assert!(!s.name.is_empty(), "scenario name must not be empty");
-            assert!(!s.description.is_empty(), "scenario description must not be empty");
+            assert!(
+                !s.description.is_empty(),
+                "scenario description must not be empty"
+            );
         }
     }
 
@@ -233,8 +242,11 @@ mod tests {
             Scenario::market_open_burst(),
         ];
         for s in scenarios {
-            assert!(matches!(s.clock_mode, ClockMode::Virtual { .. }),
-                "scenario '{}' should use virtual time", s.name);
+            assert!(
+                matches!(s.clock_mode, ClockMode::Virtual { .. }),
+                "scenario '{}' should use virtual time",
+                s.name
+            );
         }
     }
 }

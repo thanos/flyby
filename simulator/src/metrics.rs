@@ -41,20 +41,20 @@ pub enum SimMetricKey {
 impl MetricKey for SimMetricKey {
     fn name(&self) -> &'static str {
         match self {
-            Self::PacketsGenerated   => "sim.packets_generated",
-            Self::PacketsDropped     => "sim.packets_dropped",
-            Self::PacketsCorrupted   => "sim.packets_corrupted",
-            Self::RecordsRead        => "sim.records_read",
-            Self::RecordsDropped     => "sim.records_dropped",
-            Self::ThroughputBytes    => "sim.throughput_bytes",
-            Self::QueueOccupancy     => "sim.queue_occupancy",
-            Self::RingOccupancy      => "sim.ring_occupancy",
-            Self::LatencyNs          => "sim.latency_ns",
+            Self::PacketsGenerated => "sim.packets_generated",
+            Self::PacketsDropped => "sim.packets_dropped",
+            Self::PacketsCorrupted => "sim.packets_corrupted",
+            Self::RecordsRead => "sim.records_read",
+            Self::RecordsDropped => "sim.records_dropped",
+            Self::ThroughputBytes => "sim.throughput_bytes",
+            Self::QueueOccupancy => "sim.queue_occupancy",
+            Self::RingOccupancy => "sim.ring_occupancy",
+            Self::LatencyNs => "sim.latency_ns",
             Self::PlacementDecisions => "sim.placement_decisions",
-            Self::SinkWrites         => "sim.sink_writes",
-            Self::TickCount          => "sim.tick_count",
-            Self::TickDurationNs     => "sim.tick_duration_ns",
-            Self::ParserErrors       => "sim.parser_errors",
+            Self::SinkWrites => "sim.sink_writes",
+            Self::TickCount => "sim.tick_count",
+            Self::TickDurationNs => "sim.tick_duration_ns",
+            Self::ParserErrors => "sim.parser_errors",
         }
     }
 }
@@ -83,7 +83,12 @@ mod tests {
             SimMetricKey::ParserErrors,
         ];
         for key in keys {
-            assert!(key.name().starts_with("sim."), "key {:?} = '{}' lacks 'sim.' prefix", key, key.name());
+            assert!(
+                key.name().starts_with("sim."),
+                "key {:?} = '{}' lacks 'sim.' prefix",
+                key,
+                key.name()
+            );
         }
     }
 

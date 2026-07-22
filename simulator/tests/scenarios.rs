@@ -3,12 +3,12 @@
 //! Each test exercises a named [`Scenario`] end-to-end — scenario construction,
 //! NIC creation, scheduler execution, and stat verification.
 
+use flyby_core::{CountingCollector, MetricsCollector};
 use flyby_simulator::{
-    events::{NullEventSink, SimEventKind, VecEventSink},
     FaultSpec, Scenario, SimScheduler, VirtualConsumer, VirtualNic, VirtualNicConfig,
     VirtualSharedMemory,
+    events::{NullEventSink, SimEventKind, VecEventSink},
 };
-use flyby_core::{CountingCollector, MetricsCollector};
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
@@ -100,7 +100,10 @@ fn full_drop_rate_drops_every_packet() {
     let nic = VirtualNic::new(
         VirtualNicConfig {
             traffic: scenario.traffic.clone(),
-            fault: FaultSpec { drop_rate: 1.0, ..FaultSpec::default() },
+            fault: FaultSpec {
+                drop_rate: 1.0,
+                ..FaultSpec::default()
+            },
             ..VirtualNicConfig::default()
         },
         NullEventSink,
@@ -133,8 +136,14 @@ fn run_emits_started_and_stopped_events() {
     sched.run().unwrap();
 
     let events = sink.events();
-    let started = events.iter().filter(|e| matches!(e.kind, SimEventKind::SimulatorStarted { .. })).count();
-    let stopped = events.iter().filter(|e| matches!(e.kind, SimEventKind::SimulatorStopped { .. })).count();
+    let started = events
+        .iter()
+        .filter(|e| matches!(e.kind, SimEventKind::SimulatorStarted { .. }))
+        .count();
+    let stopped = events
+        .iter()
+        .filter(|e| matches!(e.kind, SimEventKind::SimulatorStopped { .. }))
+        .count();
     assert_eq!(started, 1, "exactly one SimulatorStarted event");
     assert_eq!(stopped, 1, "exactly one SimulatorStopped event");
 }
@@ -152,7 +161,8 @@ fn run_emits_tick_completed_events() {
     sched.add_nic(nic_for(&scenario));
     sched.run().unwrap();
 
-    let ticks = sink.events()
+    let ticks = sink
+        .events()
         .iter()
         .filter(|e| matches!(e.kind, SimEventKind::TickCompleted { .. }))
         .count();
@@ -218,11 +228,8 @@ fn ring_path_delivers_packets_to_consumer() {
         tick_ns: 1_000_000,
         ..Scenario::constant_rate()
     };
-    let mut sched = SimScheduler::new(scenario.clone()).with_ring(VirtualSharedMemory::new(
-        "ring0",
-        256,
-        128,
-    ));
+    let mut sched =
+        SimScheduler::new(scenario.clone()).with_ring(VirtualSharedMemory::new("ring0", 256, 128));
     sched.add_nic(nic_for(&scenario));
     sched.add_consumer(VirtualConsumer::new("c0"));
     let stats = sched.run().unwrap();

@@ -19,9 +19,7 @@
 
 use std::sync::Arc;
 
-use flyby_core::{
-    Error, ErrorKind, Lifecycle, MetricsCollector, NullCollector, Result,
-};
+use flyby_core::{Error, ErrorKind, Lifecycle, MetricsCollector, NullCollector, Result};
 use flyby_storage::{
     FileConfig, FileSource, Frame, PushResult, RawRecordBatch, RecordMeta, StorageSource,
 };
