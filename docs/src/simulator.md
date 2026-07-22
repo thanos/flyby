@@ -11,27 +11,29 @@ the simulator share the same source traits; only the adapters differ.
 ## Architecture
 
 ```text
-Virtual NICs      Virtual Storage
-      │                  │
-      └──────────┬───────┘
-                 ▼
-          Source Adapters
-                 ▼
-           Raw Batch Stream
-                 ▼
-        Virtual Shared Memory
-                 ▼
-        Virtual Consumers
+Virtual NICs / Pcap      Virtual Storage
+      │                         │
+      └────────────┬────────────┘
+                   ▼
+            Source Adapters
+                   ▼
+             Raw Batch Stream
+                   ▼
+          Virtual Shared Memory
+                   ▼
+          Virtual Consumers
 ```
 
 ## Components
 
 | Type | Role |
 |---|---|
-| `VirtualNic` | `NetworkSource` with traffic pacing + fault injection |
+| `VirtualNic` | `NetworkSource` with traffic pacing + payload generators + faults |
+| `PcapSource` | Classic pcap ingest with `SimReplay` timing |
 | `VirtualStorageSource` | `StorageSource` wrapping `FileSource` + faults |
 | `SimClock` | Real time or deterministic virtual time |
-| `TrafficPacer` | Fixed-rate / burst / full-speed emission |
+| `TrafficPacer` | Fixed-rate / burst / Gaussian / full-speed emission |
+| `PayloadSpec` | Fixed-seq, random, Gaussian size, protocol-aware, custom callbacks |
 | `FaultInjector` | LCG-seeded drop, corrupt, latency spikes |
 | `SimScheduler` | Tick loop, metrics, optional ring + consumers |
 | `VirtualSharedMemory` | In-process SPSC byte-slot ring |
@@ -40,66 +42,66 @@ Virtual NICs      Virtual Storage
 | `Scenario` | Version-controlled run presets |
 | `EduControls` | Pause, step, breakpoints, batch inspection |
 
+## Traffic generators
+
+```rust,ignore
+use flyby_simulator::{PayloadSpec, ProtocolMessage, TrafficConfig, TrafficPattern};
+
+// Gaussian arrivals
+let gaussian = TrafficConfig::gaussian_rate();
+
+// Protocol-aware binary quotes
+let quotes = TrafficConfig {
+    pattern: TrafficPattern::FixedRate { pps: 10_000 },
+    payload_size: 34,
+    batch_size: 64,
+    payload: PayloadSpec::Protocol(ProtocolMessage::market_quote("AAPL")),
+};
+
+// Custom callback
+use std::sync::Arc;
+let custom = TrafficConfig {
+    payload: PayloadSpec::Custom(Arc::new(|seq, buf| {
+        buf.fill(0);
+        buf[0] = (seq & 0xFF) as u8;
+    })),
+    ..TrafficConfig::default()
+};
+```
+
+## Pcap ingest
+
+Classic pcap only (not pcap-ng). Convert with `editcap -F pcap` if needed.
+
+```bash
+cargo run -p flyby-simulator --bin flyby-sim -- pcap capture.pcap --full-speed
+```
+
+```rust,ignore
+use flyby_simulator::{PcapConfig, PcapSource, load_pcap, NullEventSink};
+use flyby_storage::ReplayMode;
+
+let packets = load_pcap("capture.pcap")?;
+let src = PcapSource::new(
+    packets,
+    PcapConfig { replay: ReplayMode::OriginalTiming, ..Default::default() },
+    NullEventSink,
+)?;
+```
+
 ## CLI
 
 ```bash
 cargo run -p flyby-simulator --bin flyby-sim -- constant_rate
+cargo run -p flyby-simulator --bin flyby-sim -- gaussian_rate
+cargo run -p flyby-simulator --bin flyby-sim -- protocol_quotes
 ```
 
 Available scenarios: `constant_rate`, `market_open_burst`, `queue_overflow`,
-`packet_loss`, `slow_consumer`, `corrupt_packets`.
+`packet_loss`, `slow_consumer`, `corrupt_packets`, `gaussian_rate`,
+`protocol_quotes`.
 
 Throughput numbers from the CLI are **simulated**.
-
-## Library example
-
-```rust,ignore
-use flyby_simulator::{
-    Scenario, SimScheduler, VirtualNic, VirtualNicConfig, NullEventSink,
-    VirtualSharedMemory, VirtualConsumer,
-};
-
-let scenario = Scenario::packet_loss();
-let mut sched = SimScheduler::new(scenario.clone())
-    .with_ring(VirtualSharedMemory::new("ring0", 1024, 128));
-sched.add_nic(VirtualNic::new(
-    VirtualNicConfig {
-        traffic: scenario.traffic.clone(),
-        fault: scenario.fault.clone(),
-        ..Default::default()
-    },
-    NullEventSink,
-));
-sched.add_consumer(VirtualConsumer::new("c0"));
-let stats = sched.run()?;
-assert!(stats.packets_dropped > 0);
-```
-
-## Educational mode
-
-```rust,ignore
-use flyby_simulator::{EduControls, Scenario, SimScheduler};
-
-let mut sched = SimScheduler::new(Scenario::constant_rate())
-    .with_edu(EduControls { paused: true, ..Default::default() });
-sched.run()?;          // arms the run without ticking
-sched.step()?;         // one tick
-let batch = sched.last_batch();
-sched.finish_run()?;
-```
-
-## Replay
-
-Use `SimReplay` with `flyby_storage::ReplayMode` so original / scaled /
-single-step / burst timing works against the simulator clock:
-
-```rust,ignore
-use flyby_simulator::SimReplay;
-use flyby_storage::ReplayMode;
-
-let mut replay = SimReplay::new(ReplayMode::TimeScaled { factor: 0.5 })?;
-assert!(replay.ready_at(record_ts_ns, clock_ns));
-```
 
 ## When not to use it
 

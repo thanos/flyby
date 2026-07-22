@@ -284,3 +284,108 @@ fn educational_single_step_inspects_batch() {
     let stats = sched.finish_run().unwrap();
     assert_eq!(stats.ticks, 1);
 }
+
+#[test]
+fn gaussian_rate_scenario_runs() {
+    let scenario = Scenario {
+        duration: Duration::from_millis(20),
+        tick_ns: 1_000_000,
+        ..Scenario::gaussian_rate()
+    };
+    let mut sched = SimScheduler::new(scenario.clone());
+    sched.add_nic(nic_for(&scenario));
+    let stats = sched.run().unwrap();
+    assert!(stats.packets_generated > 0);
+    assert!(stats.ticks > 0);
+}
+
+#[test]
+fn protocol_quotes_scenario_runs() {
+    let scenario = Scenario {
+        duration: Duration::from_millis(10),
+        tick_ns: 1_000_000,
+        ..Scenario::protocol_quotes()
+    };
+    let mut sched = SimScheduler::new(scenario.clone());
+    sched.add_nic(nic_for(&scenario));
+    let stats = sched.run().unwrap();
+    assert!(stats.packets_generated > 0);
+}
+
+#[test]
+fn pcap_source_replays_through_scheduler() {
+    use flyby_simulator::{PcapConfig, PcapSource, write_pcap_bytes};
+    use flyby_storage::ReplayMode;
+
+    let bytes = write_pcap_bytes(&[
+        (0, &[0xAAu8; 64]),
+        (2_000_000, &[0xBBu8; 64]),
+        (4_000_000, &[0xCCu8; 32]),
+    ]);
+    let packets = flyby_simulator::parse_pcap(&bytes).unwrap();
+    let src = PcapSource::new(
+        packets,
+        PcapConfig {
+            replay: ReplayMode::FullSpeed,
+            ..PcapConfig::default()
+        },
+        NullEventSink,
+    )
+    .unwrap();
+
+    let scenario = Scenario {
+        name: "pcap_test",
+        description: "pcap integration",
+        duration: Duration::from_millis(10),
+        tick_ns: 1_000_000,
+        ..Scenario::default()
+    };
+    let mut sched = SimScheduler::new(scenario).with_ring(VirtualSharedMemory::new("r0", 64, 128));
+    sched.add_nic(src);
+    sched.add_consumer(VirtualConsumer::new("c0"));
+    let stats = sched.run().unwrap();
+    assert_eq!(stats.packets_generated, 3);
+    assert_eq!(stats.slots_written, 3);
+    assert_eq!(stats.slots_consumed, 3);
+}
+
+#[test]
+fn fixture_tiny_3pkt_loads() {
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/fixtures/tiny_3pkt.pcap");
+    let packets = flyby_simulator::load_pcap(path).expect("fixture present; run gen_pcap_fixtures");
+    assert_eq!(packets.len(), 3);
+    assert_eq!(packets[0].timestamp_ns, 0);
+    assert_eq!(packets[1].timestamp_ns, 1_000_000);
+    assert_eq!(packets[2].timestamp_ns, 5_000_000);
+}
+
+#[test]
+fn fixture_udp_quotes_and_ns() {
+    let quotes = flyby_simulator::load_pcap(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/fixtures/udp_quotes.pcap"
+    ))
+    .unwrap();
+    assert_eq!(quotes.len(), 20);
+    // Ethernet/IP/UDP + 34-byte quote
+    assert_eq!(quotes[0].data.len(), 42 + 34);
+
+    let ns = flyby_simulator::load_pcap(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/fixtures/ns_timestamps.pcap"
+    ))
+    .unwrap();
+    assert_eq!(ns.len(), 3);
+    assert_eq!(ns[1].timestamp_ns, 250);
+    assert_eq!(ns[2].timestamp_ns, 1_500);
+}
+
+#[test]
+fn fixture_empty_pcap() {
+    let packets = flyby_simulator::load_pcap(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/fixtures/empty.pcap"
+    ))
+    .unwrap();
+    assert!(packets.is_empty());
+}

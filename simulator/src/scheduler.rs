@@ -107,6 +107,36 @@ where
     }
 }
 
+impl<E> DynNic for crate::pcap::PcapSource<E>
+where
+    E: EventSink + Send,
+{
+    fn init(&mut self) -> flyby_core::Result<()> {
+        flyby_core::Lifecycle::init(self)
+    }
+    fn shutdown(&mut self) -> flyby_core::Result<()> {
+        flyby_core::Lifecycle::shutdown(self)
+    }
+    fn set_tick_context(&mut self, tick_ns: u64, clock_ns: u64) {
+        crate::pcap::PcapSource::set_tick_context(self, tick_ns, clock_ns);
+    }
+    fn poll(&mut self, batch: &mut RawBatch) -> flyby_core::Result<usize> {
+        flyby_net::NetworkSource::poll_batch(self, batch)
+    }
+    fn take_spike_ns(&mut self) -> u64 {
+        crate::pcap::PcapSource::take_spike_ns(self)
+    }
+    fn packets_generated(&self) -> u64 {
+        self.packets_generated
+    }
+    fn packets_dropped(&self) -> u64 {
+        self.packets_dropped
+    }
+    fn packets_corrupted(&self) -> u64 {
+        self.packets_corrupted
+    }
+}
+
 /// Educational / interactive run controls.
 #[derive(Debug, Clone, Default)]
 pub struct EduControls {
@@ -441,6 +471,7 @@ mod tests {
     use crate::clock::ClockMode;
     use crate::events::VecEventSink;
     use crate::fault::FaultSpec;
+    use crate::generator::PayloadSpec;
     use crate::nic::{VirtualNic, VirtualNicConfig};
     use crate::ring::VirtualSharedMemory;
     use crate::scenario::Scenario;
@@ -452,6 +483,7 @@ mod tests {
                 pattern: TrafficPattern::FixedRate { pps: 1_000 },
                 payload_size: 8,
                 batch_size,
+                payload: PayloadSpec::FixedSeq,
             },
             fault: FaultSpec::default(),
             ..VirtualNicConfig::default()
@@ -584,6 +616,7 @@ mod tests {
                 pattern: TrafficPattern::FullSpeed,
                 batch_size: 8,
                 payload_size: 8,
+                payload: PayloadSpec::FixedSeq,
             },
             clock_mode: ClockMode::Virtual { start_ns: 0 },
             ..Scenario::default()

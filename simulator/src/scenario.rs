@@ -14,6 +14,8 @@
 //! | [`Scenario::queue_overflow`] | High rate + tight ring → observable drops |
 //! | [`Scenario::packet_loss`] | 5% random drop rate |
 //! | [`Scenario::slow_consumer`] | Low rate, high latency spikes |
+//! | [`Scenario::gaussian_rate`] | Gaussian arrivals around 50 kpps |
+//! | [`Scenario::protocol_quotes`] | Binary market-quote payloads |
 //!
 //! ## Usage
 //!
@@ -67,9 +69,8 @@ impl Default for Scenario {
 
 impl Scenario {
     /// Steady 100 kpps traffic, no faults, 1 second virtual duration.
-    ///
-    /// Baseline scenario for throughput benchmarks.
     pub fn constant_rate() -> Self {
+        use crate::generator::PayloadSpec;
         use crate::traffic::TrafficPattern;
         Self {
             name: "constant_rate",
@@ -78,6 +79,7 @@ impl Scenario {
                 pattern: TrafficPattern::FixedRate { pps: 100_000 },
                 payload_size: 8,
                 batch_size: 128,
+                payload: PayloadSpec::FixedSeq,
             },
             fault: FaultSpec::default(),
             duration: Duration::from_secs(1),
@@ -87,9 +89,6 @@ impl Scenario {
     }
 
     /// 10 000-packet burst then 1 ms gap, 5 seconds virtual duration.
-    ///
-    /// Models a market-open auction: a large burst of order messages followed
-    /// by normal market-data flow.
     pub fn market_open_burst() -> Self {
         Self {
             name: "market_open_burst",
@@ -103,10 +102,8 @@ impl Scenario {
     }
 
     /// High packet rate + small ring = measurable queue overflow.
-    ///
-    /// Use this to verify that drop counters and `QueueOverflow` events are
-    /// wired correctly.
     pub fn queue_overflow() -> Self {
+        use crate::generator::PayloadSpec;
         use crate::traffic::TrafficPattern;
         Self {
             name: "queue_overflow",
@@ -115,6 +112,7 @@ impl Scenario {
                 pattern: TrafficPattern::FullSpeed,
                 payload_size: 8,
                 batch_size: 256,
+                payload: PayloadSpec::FixedSeq,
             },
             fault: FaultSpec::default(),
             duration: Duration::from_millis(100),
@@ -125,6 +123,7 @@ impl Scenario {
 
     /// 5% random packet drop, 10 seconds, 10 kpps.
     pub fn packet_loss() -> Self {
+        use crate::generator::PayloadSpec;
         use crate::traffic::TrafficPattern;
         Self {
             name: "packet_loss",
@@ -133,6 +132,7 @@ impl Scenario {
                 pattern: TrafficPattern::FixedRate { pps: 10_000 },
                 payload_size: 8,
                 batch_size: 64,
+                payload: PayloadSpec::FixedSeq,
             },
             fault: FaultSpec {
                 drop_rate: 0.05,
@@ -145,10 +145,8 @@ impl Scenario {
     }
 
     /// Low rate with 10% probability of a 500 µs latency spike.
-    ///
-    /// Models a slow or intermittently stalled consumer, e.g. one that
-    /// performs disk I/O on the critical path.
     pub fn slow_consumer() -> Self {
+        use crate::generator::PayloadSpec;
         use crate::traffic::TrafficPattern;
         Self {
             name: "slow_consumer",
@@ -157,6 +155,7 @@ impl Scenario {
                 pattern: TrafficPattern::FixedRate { pps: 1_000 },
                 payload_size: 8,
                 batch_size: 16,
+                payload: PayloadSpec::FixedSeq,
             },
             fault: FaultSpec {
                 latency_spike_rate: 0.10,
@@ -171,6 +170,7 @@ impl Scenario {
 
     /// Corrupt 1% of packets.  Useful to test parser error handling.
     pub fn corrupt_packets() -> Self {
+        use crate::generator::PayloadSpec;
         use crate::traffic::TrafficPattern;
         Self {
             name: "corrupt_packets",
@@ -179,11 +179,38 @@ impl Scenario {
                 pattern: TrafficPattern::FixedRate { pps: 1_000 },
                 payload_size: 32,
                 batch_size: 16,
+                payload: PayloadSpec::FixedSeq,
             },
             fault: FaultSpec {
                 corrupt_rate: 0.01,
                 ..FaultSpec::default()
             },
+            duration: Duration::from_secs(1),
+            clock_mode: ClockMode::Virtual { start_ns: 0 },
+            tick_ns: 1_000_000,
+        }
+    }
+
+    /// Gaussian arrival process around 50 kpps for 1 virtual second.
+    pub fn gaussian_rate() -> Self {
+        Self {
+            name: "gaussian_rate",
+            description: "Gaussian arrivals ~ N(50k, 10k) pps, 1 second.",
+            traffic: TrafficConfig::gaussian_rate(),
+            fault: FaultSpec::default(),
+            duration: Duration::from_secs(1),
+            clock_mode: ClockMode::Virtual { start_ns: 0 },
+            tick_ns: 1_000_000,
+        }
+    }
+
+    /// Protocol-aware binary market quotes at 10 kpps.
+    pub fn protocol_quotes() -> Self {
+        Self {
+            name: "protocol_quotes",
+            description: "10 kpps binary market-quote payloads (AAPL).",
+            traffic: TrafficConfig::protocol_quotes(),
+            fault: FaultSpec::default(),
             duration: Duration::from_secs(1),
             clock_mode: ClockMode::Virtual { start_ns: 0 },
             tick_ns: 1_000_000,
@@ -224,6 +251,8 @@ mod tests {
             Scenario::packet_loss(),
             Scenario::slow_consumer(),
             Scenario::corrupt_packets(),
+            Scenario::gaussian_rate(),
+            Scenario::protocol_quotes(),
         ];
         for s in &scenarios {
             assert!(!s.name.is_empty(), "scenario name must not be empty");
@@ -240,6 +269,7 @@ mod tests {
             Scenario::default(),
             Scenario::constant_rate(),
             Scenario::market_open_burst(),
+            Scenario::gaussian_rate(),
         ];
         for s in scenarios {
             assert!(
