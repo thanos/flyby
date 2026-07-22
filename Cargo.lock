@@ -215,6 +215,9 @@ name = "flyby-simulator"
 version = "0.1.0"
 dependencies = [
  "flyby-core",
+ "flyby-net",
+ "flyby-storage",
+ "tempfile",
 ]
 
 [[package]]

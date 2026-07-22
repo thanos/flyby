@@ -115,11 +115,29 @@ impl RawRecordBatch {
         (0..self.count).map(move |i| (&self.bufs[i][..self.lens[i]], &self.meta[i]))
     }
 
+    /// Mutable access to record `index` (payload slice + metadata).
+    ///
+    /// Returns `None` when `index >= len()`.
+    pub fn record_mut(&mut self, index: usize) -> Option<(&mut [u8], &mut RecordMeta)> {
+        if index >= self.count {
+            return None;
+        }
+        let len = self.lens[index];
+        Some((&mut self.bufs[index][..len], &mut self.meta[index]))
+    }
+
+    /// Shrink the occupied count to `new_len`, discarding trailing records.
+    pub fn truncate(&mut self, new_len: usize) {
+        if new_len < self.count {
+            self.count = new_len;
+        }
+    }
+
     /// Copy `data` into the next free slot and record `meta`.
     ///
     /// Does **not** truncate: oversized records return [`PushResult::Oversized`]
     /// and increment [`parse_errors`][Self::parse_errors].
-    pub(crate) fn push(&mut self, data: &[u8], meta: RecordMeta) -> PushResult {
+    pub fn push(&mut self, data: &[u8], meta: RecordMeta) -> PushResult {
         if self.count >= self.bufs.len() {
             return PushResult::Full;
         }

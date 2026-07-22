@@ -140,13 +140,34 @@ impl RawBatch {
         (0..self.count).map(move |i| (&self.bufs[i][..self.lens[i]], &self.meta[i]))
     }
 
+    /// Mutable access to packet `index` (payload slice + metadata).
+    ///
+    /// Returns `None` when `index >= len()`. Useful for fault injection
+    /// (payload corruption) and educational packet inspection.
+    pub fn packet_mut(&mut self, index: usize) -> Option<(&mut [u8], &mut PacketMeta)> {
+        if index >= self.count {
+            return None;
+        }
+        let len = self.lens[index];
+        Some((&mut self.bufs[index][..len], &mut self.meta[index]))
+    }
+
+    /// Shrink the occupied count to `new_len`, discarding trailing packets.
+    ///
+    /// No-op when `new_len >= len()`. Cumulative counters are retained.
+    pub fn truncate(&mut self, new_len: usize) {
+        if new_len < self.count {
+            self.count = new_len;
+        }
+    }
+
     /// Copy `data` into the next free slot and record `meta`.
     ///
     /// When `data` exceeds the slot size, the frame is truncated, `meta.original_len`
     /// is set to the true length (if it was zero or smaller), and
     /// [`PushResult::Truncated`] is returned. Prefer sizing slots to avoid
     /// truncation; callers that forbid truncation should check the result.
-    pub(crate) fn push(&mut self, data: &[u8], mut meta: PacketMeta) -> PushResult {
+    pub fn push(&mut self, data: &[u8], mut meta: PacketMeta) -> PushResult {
         if self.count >= self.bufs.len() {
             return PushResult::Full;
         }

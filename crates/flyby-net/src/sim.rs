@@ -95,6 +95,21 @@ impl SimulatedNetSource {
         self
     }
 
+    /// Override how many packets the next [`poll_batch`][NetworkSource::poll_batch]
+    /// attempts to produce.
+    ///
+    /// Used by the FlyBy simulator to enforce traffic pacing per tick.
+    /// Values of `0` are clamped to `1` so validation still passes; callers
+    /// that want a zero-packet tick should skip `poll_batch` entirely.
+    pub fn set_batch_size(&mut self, batch_size: usize) {
+        self.config.batch_size = batch_size.max(1);
+    }
+
+    /// Current configured batch size.
+    pub fn batch_size(&self) -> usize {
+        self.config.batch_size
+    }
+
     fn fill_static_headers(buf: &mut [u8], udp_dst_port: u16, frame_size: usize) {
         buf[0..6].copy_from_slice(&[0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]);
         buf[6..12].copy_from_slice(&[0x02, 0x00, 0x00, 0x00, 0x00, 0x01]);
