@@ -6,11 +6,13 @@
 //! wiring.
 
 use std::collections::HashMap;
+use std::marker::PhantomData;
 
 use crate::api::{
     Decoder, Error, ErrorKind, Lifecycle, Message, MetricsCollector, NullCollector, Pipeline,
-    Placement, PreProcessor, Result, Sink, SinkId, StepOutcome,
+    Placement, PreProcessor, Result, SchemaId, Sink, SinkId, StepOutcome,
 };
+use crate::runtime::{BackpressureStrategy, RuntimeConfig, RuntimeMetricKey};
 
 /// Pulls framed raw bytes into a caller-supplied buffer.
 ///
@@ -94,6 +96,127 @@ impl<M: Message> Placement for DropAllPlacement<M> {
     }
 }
 
+/// Round-robin across a non-empty list of sinks.
+#[derive(Debug, Clone)]
+pub struct RoundRobinPlacement<M> {
+    sinks: Vec<SinkId>,
+    next: usize,
+    _marker: PhantomData<fn() -> M>,
+}
+
+impl<M: Message> RoundRobinPlacement<M> {
+    /// Create a round-robin placement. `sinks` must be non-empty and exclude [`SinkId::NONE`].
+    pub fn new(sinks: Vec<SinkId>) -> Result<Self> {
+        if sinks.is_empty() {
+            return Err(Error::config(
+                "RoundRobinPlacement requires at least one sink",
+            ));
+        }
+        if sinks.iter().any(|s| s.is_none()) {
+            return Err(Error::config(
+                "RoundRobinPlacement cannot include SinkId::NONE",
+            ));
+        }
+        Ok(Self {
+            sinks,
+            next: 0,
+            _marker: PhantomData,
+        })
+    }
+}
+
+impl<M: Message> Placement for RoundRobinPlacement<M> {
+    type Message = M;
+
+    fn route(&mut self, _message: &M) -> Result<SinkId> {
+        let id = self.sinks[self.next % self.sinks.len()];
+        self.next = self.next.wrapping_add(1);
+        Ok(id)
+    }
+}
+
+/// Hash a key extracted from the message onto a sink list.
+pub struct HashPlacement<M, F> {
+    sinks: Vec<SinkId>,
+    key_fn: F,
+    _marker: PhantomData<fn() -> M>,
+}
+
+impl<M, F> HashPlacement<M, F>
+where
+    M: Message,
+    F: FnMut(&M) -> u64 + Send + Sync,
+{
+    /// Create a hash placement. `sinks` must be non-empty.
+    pub fn new(sinks: Vec<SinkId>, key_fn: F) -> Result<Self> {
+        if sinks.is_empty() {
+            return Err(Error::config("HashPlacement requires at least one sink"));
+        }
+        if sinks.iter().any(|s| s.is_none()) {
+            return Err(Error::config("HashPlacement cannot include SinkId::NONE"));
+        }
+        Ok(Self {
+            sinks,
+            key_fn,
+            _marker: PhantomData,
+        })
+    }
+}
+
+impl<M, F> Placement for HashPlacement<M, F>
+where
+    M: Message,
+    F: FnMut(&M) -> u64 + Send + Sync,
+{
+    type Message = M;
+
+    fn route(&mut self, message: &M) -> Result<SinkId> {
+        let key = (self.key_fn)(message);
+        let idx = (key as usize) % self.sinks.len();
+        Ok(self.sinks[idx])
+    }
+}
+
+/// Hash the message [`SchemaId`] onto sinks.
+pub type SchemaHashPlacement<M> = HashPlacement<M, fn(&M) -> u64>;
+
+/// Hash the message [`SchemaId`][crate::api::SchemaId] onto sinks.
+pub fn schema_hash_placement<M: Message>(sinks: Vec<SinkId>) -> Result<SchemaHashPlacement<M>> {
+    HashPlacement::new(sinks, |m: &M| u64::from(m.schema_id().id()))
+}
+
+/// Callback-driven placement (custom business rules stay outside the runtime).
+pub struct CallbackPlacement<M, F> {
+    callback: F,
+    _marker: PhantomData<fn() -> M>,
+}
+
+impl<M, F> CallbackPlacement<M, F>
+where
+    M: Message,
+    F: FnMut(&M) -> Result<SinkId> + Send + Sync,
+{
+    /// Wrap a routing callback.
+    pub fn new(callback: F) -> Self {
+        Self {
+            callback,
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<M, F> Placement for CallbackPlacement<M, F>
+where
+    M: Message,
+    F: FnMut(&M) -> Result<SinkId> + Send + Sync,
+{
+    type Message = M;
+
+    fn route(&mut self, message: &M) -> Result<SinkId> {
+        (self.callback)(message)
+    }
+}
+
 /// A single-threaded pipeline: source → decode → preprocess → place → sink.
 pub struct SimplePipeline<M, S, D, P, Pl>
 where
@@ -109,11 +232,14 @@ where
     placement: Pl,
     sinks: HashMap<u32, Box<dyn Sink<Message = M>>>,
     metrics: Box<dyn MetricsCollector>,
+    runtime: RuntimeConfig,
     /// Pending frames from the last source poll, awaiting decode.
     pending: Vec<Vec<u8>>,
     pending_idx: usize,
     initialized: bool,
     messages_out: u64,
+    messages_dropped: u64,
+    backpressure_events: u64,
 }
 
 impl<M, S, D, P, Pl> SimplePipeline<M, S, D, P, Pl>
@@ -133,10 +259,13 @@ where
             placement,
             sinks: HashMap::new(),
             metrics: Box::new(NullCollector),
+            runtime: RuntimeConfig::default(),
             pending: Vec::new(),
             pending_idx: 0,
             initialized: false,
             messages_out: 0,
+            messages_dropped: 0,
+            backpressure_events: 0,
         }
     }
 
@@ -146,9 +275,30 @@ where
         self
     }
 
+    /// Attach runtime configuration (back-pressure, batch hints, metrics toggle).
+    pub fn with_runtime(mut self, runtime: RuntimeConfig) -> Self {
+        self.runtime = runtime;
+        self
+    }
+
+    /// Borrow runtime configuration.
+    pub fn runtime_config(&self) -> &RuntimeConfig {
+        &self.runtime
+    }
+
     /// Messages successfully written to a sink since construction / last re-init.
     pub fn messages_out(&self) -> u64 {
         self.messages_out
+    }
+
+    /// Messages dropped by back-pressure policy.
+    pub fn messages_dropped(&self) -> u64 {
+        self.messages_dropped
+    }
+
+    /// Back-pressure events observed.
+    pub fn backpressure_events(&self) -> u64 {
+        self.backpressure_events
     }
 
     /// Borrow the source.
@@ -170,36 +320,134 @@ where
         Ok(())
     }
 
+    fn record_metric(&self, key: RuntimeMetricKey, n: u64) {
+        if self.runtime.metrics {
+            self.metrics.record_counter(&key, n);
+        }
+    }
+
     fn refill_pending(&mut self) -> Result<bool> {
         self.pending.clear();
         self.pending_idx = 0;
         let n = self.source.poll_frames(&mut self.pending)?;
+        // Honour runtime batch_size as an upper bound on pending work.
+        if self.pending.len() > self.runtime.batch_size {
+            self.pending.truncate(self.runtime.batch_size);
+        }
         Ok(n > 0)
     }
 
-    fn process_one_frame(&mut self, frame: &[u8]) -> Result<StepOutcome> {
+    /// Decode → preprocess → place → write one frame, applying back-pressure policy.
+    fn process_one_frame(&mut self, frame: &[u8]) -> Result<FrameResult> {
         let Some(msg) = self.decoder.decode(frame)? else {
-            return Ok(StepOutcome::Idle);
+            self.record_metric(RuntimeMetricKey::IdleSkips, 1);
+            return Ok(FrameResult::Skipped);
         };
         let Some(msg) = self.preprocessor.process(msg)? else {
-            return Ok(StepOutcome::Idle);
+            self.record_metric(RuntimeMetricKey::IdleSkips, 1);
+            return Ok(FrameResult::Skipped);
         };
         let sink_id = self.placement.route(&msg)?;
         if sink_id.is_none() {
-            return Ok(StepOutcome::Idle);
+            self.record_metric(RuntimeMetricKey::IdleSkips, 1);
+            return Ok(FrameResult::Skipped);
         }
-        let sink = self.sinks.get_mut(&sink_id.as_u32()).ok_or_else(|| {
-            Error::placement(format!("no sink registered for id {}", sink_id.as_u32()))
-        })?;
-        match sink.write(&msg) {
-            Ok(()) => {
-                self.messages_out += 1;
-                Ok(StepOutcome::Progress)
+        self.write_with_backpressure(sink_id, &msg)
+    }
+
+    fn write_with_backpressure(&mut self, sink_id: SinkId, msg: &M) -> Result<FrameResult> {
+        let mut retries = 0u32;
+        let max_retries = self.runtime.backpressure_retries;
+        loop {
+            let write_result = {
+                let sink = self.sinks.get_mut(&sink_id.as_u32()).ok_or_else(|| {
+                    Error::placement(format!("no sink registered for id {}", sink_id.as_u32()))
+                })?;
+                sink.write(msg)
+            };
+            match write_result {
+                Ok(()) => {
+                    self.messages_out += 1;
+                    self.record_metric(RuntimeMetricKey::MessagesOut, 1);
+                    return Ok(FrameResult::Written);
+                }
+                Err(e) if e.kind() == ErrorKind::BackPressure => {
+                    self.backpressure_events += 1;
+                    self.record_metric(RuntimeMetricKey::BackpressureEvents, 1);
+                    match self.runtime.backpressure {
+                        BackpressureStrategy::DropNewest | BackpressureStrategy::DropOldest => {
+                            self.messages_dropped += 1;
+                            self.record_metric(RuntimeMetricKey::MessagesDropped, 1);
+                            return Ok(FrameResult::Dropped);
+                        }
+                        BackpressureStrategy::Overflow => {
+                            if let Some(oid) = self.runtime.overflow_sink {
+                                let overflow = SinkId::try_new(oid)?;
+                                if overflow != sink_id {
+                                    let over_res = {
+                                        let sink = self.sinks.get_mut(&overflow.as_u32());
+                                        match sink {
+                                            Some(s) => s.write(msg),
+                                            None => Err(Error::placement(format!(
+                                                "overflow sink {oid} not registered"
+                                            ))),
+                                        }
+                                    };
+                                    match over_res {
+                                        Ok(()) => {
+                                            self.messages_out += 1;
+                                            self.record_metric(RuntimeMetricKey::MessagesOut, 1);
+                                            return Ok(FrameResult::Written);
+                                        }
+                                        Err(e2) if e2.kind() == ErrorKind::BackPressure => {
+                                            self.messages_dropped += 1;
+                                            self.record_metric(
+                                                RuntimeMetricKey::MessagesDropped,
+                                                1,
+                                            );
+                                            return Ok(FrameResult::Dropped);
+                                        }
+                                        Err(e2) => return Err(e2),
+                                    }
+                                }
+                            }
+                            self.messages_dropped += 1;
+                            self.record_metric(RuntimeMetricKey::MessagesDropped, 1);
+                            return Ok(FrameResult::Dropped);
+                        }
+                        BackpressureStrategy::Block
+                        | BackpressureStrategy::Spin
+                        | BackpressureStrategy::AdaptiveBatching => {
+                            retries += 1;
+                            if let Some(max) = max_retries {
+                                if retries > max {
+                                    return Ok(FrameResult::BackPressured);
+                                }
+                            }
+                            let yield_d = self.runtime.backpressure_yield();
+                            if yield_d.is_zero()
+                                || matches!(self.runtime.backpressure, BackpressureStrategy::Spin)
+                            {
+                                std::thread::yield_now();
+                            } else {
+                                std::thread::sleep(yield_d);
+                            }
+                        }
+                    }
+                }
+                Err(e) => return Err(e),
             }
-            Err(e) if e.kind() == ErrorKind::BackPressure => Ok(StepOutcome::BackPressured),
-            Err(e) => Err(e),
         }
     }
+}
+
+/// Result of attempting to process one frame.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FrameResult {
+    Written,
+    Skipped,
+    Dropped,
+    BackPressured,
 }
 
 impl<M, S, D, P, Pl> Lifecycle for SimplePipeline<M, S, D, P, Pl>
@@ -223,6 +471,8 @@ where
         self.pending.clear();
         self.pending_idx = 0;
         self.messages_out = 0;
+        self.messages_dropped = 0;
+        self.backpressure_events = 0;
         self.initialized = true;
         Ok(())
     }
@@ -272,15 +522,22 @@ where
     fn step_outcome(&mut self) -> Result<StepOutcome> {
         self.ensure_init()?;
 
-        // Drain pending frames first.
+        // Drain pending frames first (batch-oriented: process until progress/BP).
         while self.pending_idx < self.pending.len() {
             let frame = self.pending[self.pending_idx].clone();
-            self.pending_idx += 1;
-            let outcome = self.process_one_frame(&frame)?;
-            match outcome {
-                StepOutcome::Progress | StepOutcome::BackPressured => return Ok(outcome),
-                StepOutcome::Idle => continue,
-                StepOutcome::Exhausted => return Ok(StepOutcome::Exhausted),
+            match self.process_one_frame(&frame)? {
+                FrameResult::Written | FrameResult::Dropped => {
+                    self.pending_idx += 1;
+                    return Ok(StepOutcome::Progress);
+                }
+                FrameResult::Skipped => {
+                    self.pending_idx += 1;
+                    continue;
+                }
+                FrameResult::BackPressured => {
+                    // Do not advance pending_idx — retry same frame next step.
+                    return Ok(StepOutcome::BackPressured);
+                }
             }
         }
 
@@ -296,15 +553,18 @@ where
             return Ok(StepOutcome::Idle);
         }
 
-        // Process first available frame from the new batch.
         while self.pending_idx < self.pending.len() {
             let frame = self.pending[self.pending_idx].clone();
-            self.pending_idx += 1;
-            let outcome = self.process_one_frame(&frame)?;
-            match outcome {
-                StepOutcome::Progress | StepOutcome::BackPressured => return Ok(outcome),
-                StepOutcome::Idle => continue,
-                StepOutcome::Exhausted => return Ok(StepOutcome::Exhausted),
+            match self.process_one_frame(&frame)? {
+                FrameResult::Written | FrameResult::Dropped => {
+                    self.pending_idx += 1;
+                    return Ok(StepOutcome::Progress);
+                }
+                FrameResult::Skipped => {
+                    self.pending_idx += 1;
+                    continue;
+                }
+                FrameResult::BackPressured => return Ok(StepOutcome::BackPressured),
             }
         }
         Ok(StepOutcome::Idle)

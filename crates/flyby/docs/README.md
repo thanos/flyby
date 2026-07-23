@@ -7,7 +7,15 @@ sink.
 ## Status
 
 - Builder `.run()` validates feature selection (skeleton).
-- `SimplePipeline` drives source → decode → preprocess → place → sink.
+- `SimplePipeline` drives source → decode → preprocess → place → sink
+  with configurable back-pressure and runtime metrics (Part VII).
+- `flyby::runtime` — `RuntimeConfig` (TOML ≡ builder), schedulers
+  (single-thread + worker pool), lifecycle driver, placement helpers.
 - Builder `.run_demo()` builds a `SimplePipeline` (sim → memory) when
   the `memory` feature is enabled.
-- Multi-sink registration and type-state builder remain incremental work.
+- Multi-sink type-state builder remains incremental work.
+
+## Docs
+
+- Project guide: [`docs/src/runtime.md`](../../../docs/src/runtime.md)
+- ADR-009 / ADR-010: batch-oriented runtime; runtime independent of backends

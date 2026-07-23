@@ -35,4 +35,7 @@ flyby-memory = { workspace = true, optional = true }
 flyby-net = { workspace = true }
 flyby-storage = { workspace = true }
 
+serde = { version = "1", features = ["derive"] }
+toml = "0.8"
+
 [dev-dependencies]

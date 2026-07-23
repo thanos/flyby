@@ -25,6 +25,15 @@ ADRs are numbered, single-file Markdown documents. Copy
 
 ## Index
 
-| Number | Title                                  | Status |
-|--------|----------------------------------------|--------|
-| 0001   | Record architecture decisions          | Accepted |
+| Number | Title | Status |
+|--------|--------|--------|
+| 0001 | Record architecture decisions | Accepted |
+| 0002 | AF_XDP before DPDK | Accepted |
+| 0003 | eBPF is an implementation detail | Accepted |
+| 0004 | Copy mode before zero-copy | Accepted |
+| 0005 | File reader before io_uring | Accepted |
+| 0006 | io_uring before SPDK | Accepted |
+| 0007 | Simulator before hardware | Accepted |
+| 0008 | Simulator is a product feature | Accepted |
+| 0009 | Batch-oriented runtime | Accepted |
+| 0010 | Runtime independent of backends | Accepted |

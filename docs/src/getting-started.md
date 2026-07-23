@@ -59,6 +59,8 @@ cargo test --workspace
 cargo doc --workspace --no-deps
 ```
 
+Runtime (scheduling / back-pressure) docs: [Runtime](./runtime.md).
+
 ## Feature flags
 
 | Feature      | Default | Backend                                     |
