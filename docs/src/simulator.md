@@ -41,6 +41,7 @@ Virtual NICs / Pcap      Virtual Storage
 | `SimReplay` | Virtual-clock adapter over storage `ReplayMode` |
 | `Scenario` | Version-controlled run presets |
 | `EduControls` | Pause, step, breakpoints, batch inspection |
+| TUI dashboard | Ratatui view of clock, queues, events, sparklines |
 
 ## Traffic generators
 
@@ -89,7 +90,7 @@ let src = PcapSource::new(
 )?;
 ```
 
-## CLI
+## CLI (headless)
 
 ```bash
 cargo run -p flyby-simulator --bin flyby-sim -- constant_rate
@@ -102,6 +103,92 @@ Available scenarios: `constant_rate`, `market_open_burst`, `queue_overflow`,
 `protocol_quotes`.
 
 Throughput numbers from the CLI are **simulated**.
+
+## TUI dashboard
+
+The Ratatui dashboard is the interactive way to watch a scenario: clock,
+ring occupancy, drop counters, event flow, and sparklines. Feature `tui`
+is enabled by default.
+
+### Launch
+
+```bash
+# Steady baseline
+cargo run -p flyby-simulator --bin flyby-sim -- tui constant_rate
+
+# Fault injection (watch drop %)
+cargo run -p flyby-simulator --bin flyby-sim -- tui packet_loss
+
+# Tiny ring — occupancy / overflow pressure
+cargo run -p flyby-simulator --bin flyby-sim -- tui queue_overflow
+
+# Protocol-aware payloads
+cargo run -p flyby-simulator --bin flyby-sim -- tui protocol_quotes
+```
+
+Requires a real terminal (not all CI log scrapers). For headless builds
+without Ratatui: `--no-default-features`.
+
+### Keyboard controls
+
+| Key | Action |
+|---|---|
+| `Space` | Toggle auto-run / pause |
+| `s` or `→` | Single-step one scheduler tick |
+| `+` / `-` | Increase / decrease ticks per UI frame |
+| `r` | Restart the scenario from tick 0 |
+| `q` or `Esc` | Quit (also `Ctrl-C`) |
+
+Suggested first session: start paused → press `s` a few times → `Space` to
+auto-run → `+` to speed up → `q` to exit.
+
+### What each pane shows
+
+1. **Header** — scenario name, PAUSED/AUTO/DONE badge, **\[SIMULATED\]** label  
+2. **Simulator clock** — virtual-time progress through the scenario duration  
+3. **Pipeline / queues** — packets generated/dropped/corrupted, SHM writes,
+   consumer reads, ring fill, last batch size  
+4. **Ring occupancy** — gauge for shared-memory back-pressure  
+5. **Event flow** — recent faults, ticks, lifecycle (quieter during fast auto-run)  
+6. **Sparklines** — packets per tick and tick wall-latency (ns)  
+7. **Footer** — status line + key hints  
+
+### Screenshots
+
+Captured from the live dashboard via the TestBackend (regenerate with
+`cargo run -p flyby-simulator --example render_tui_docs`).
+
+**Paused at start** (`constant_rate`):
+
+![TUI paused on constant_rate](./images/tui/01-paused-constant-rate.svg)
+
+**After stepping** (`packet_loss` — note the drop counter):
+
+![TUI packet_loss after steps](./images/tui/02-packet-loss-stepped.svg)
+
+**Ring pressure** (`queue_overflow`):
+
+![TUI queue_overflow](./images/tui/03-queue-overflow.svg)
+
+Plain-text copies of the same frames live beside the SVGs in
+[`docs/src/images/tui/`](./images/tui/) for diff-friendly reviews.
+
+### Regenerating screenshots
+
+```bash
+cargo run -p flyby-simulator --example render_tui_docs
+```
+
+## Medium articles
+
+Publishing hooks live under `articles/` (catalog + screenshots + expected
+output). Reproduce a post with:
+
+```bash
+./scripts/reproduce-article.sh part-vi-simulator-intro
+```
+
+See [Medium articles](./articles.md).
 
 ## When not to use it
 

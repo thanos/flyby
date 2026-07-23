@@ -1,0 +1,59 @@
+# Articles catalog
+
+Each `[[article]]` is a Medium post hook. Paths are relative to the
+workspace root unless noted.
+
+```toml
+# schema (informal):
+# slug          = URL-safe id (also the articles/<slug>/ folder name)
+# title         = Medium headline
+# git_tag       = annotated/lightweight tag readers should use
+# summary       = one-line blurb
+# medium_url    = published URL (omit or empty while drafting)
+# assets_dir    = articles/<assets_dir>/ (usually same as slug)
+# workload      = "scenario" | "pcap"
+# scenario      = built-in flyby-sim scenario name (when workload = scenario)
+# pcap          = path to classic pcap (when workload = pcap)
+# full_speed    = true/false for pcap replay (default true)
+```
+
+[[article]]
+slug = "part-vi-simulator-intro"
+title = "FlyBy Part VI: A Simulator Before the Hardware"
+git_tag = "medium/part-vi-simulator-intro"
+summary = "Introduce the first-class simulator with a steady 100 kpps run."
+medium_url = ""
+assets_dir = "part-vi-simulator-intro"
+workload = "scenario"
+scenario = "constant_rate"
+
+[[article]]
+slug = "part-vi-fault-injection"
+title = "FlyBy Part VI: Deterministic Fault Injection"
+git_tag = "medium/part-vi-fault-injection"
+summary = "LCG-seeded packet drops with observable counters."
+medium_url = ""
+assets_dir = "part-vi-fault-injection"
+workload = "scenario"
+scenario = "packet_loss"
+
+[[article]]
+slug = "part-vi-protocol-quotes"
+title = "FlyBy Part VI: Protocol-Aware Traffic Generators"
+git_tag = "medium/part-vi-protocol-quotes"
+summary = "Binary market-quote payloads through VirtualNic."
+medium_url = ""
+assets_dir = "part-vi-protocol-quotes"
+workload = "scenario"
+scenario = "protocol_quotes"
+
+[[article]]
+slug = "part-vi-pcap-replay"
+title = "FlyBy Part VI: Replaying Classic Pcap Captures"
+git_tag = "medium/part-vi-pcap-replay"
+summary = "Replay the udp_quotes fixture end-to-end."
+medium_url = ""
+assets_dir = "part-vi-pcap-replay"
+workload = "pcap"
+pcap = "simulator/fixtures/udp_quotes.pcap"
+full_speed = true

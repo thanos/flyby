@@ -35,6 +35,7 @@
 # Workflows
 
 - [Simulator](./simulator.md)
+- [Medium articles](./articles.md)
 - [Benchmarks](./benchmarks.md)
 
 # Decisions

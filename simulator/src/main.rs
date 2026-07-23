@@ -1,24 +1,17 @@
-//! `flyby-sim` CLI: run named scenarios or replay a classic pcap.
+//! `flyby-sim` CLI: run named scenarios, replay pcap, or open the TUI dashboard.
 //!
 //! Usage:
 //!
 //! ```text
 //! flyby-sim [scenario]
+//! flyby-sim tui [scenario]
 //! flyby-sim pcap <path> [--full-speed]
 //! ```
 //!
-//! Scenarios:
-//!
-//! - `constant_rate` (default)
-//! - `market_open_burst`
-//! - `queue_overflow`
-//! - `packet_loss`
-//! - `slow_consumer`
-//! - `corrupt_packets`
-//! - `gaussian_rate`
-//! - `protocol_quotes`
-//!
 //! Results are **simulated** and must not be quoted as hardware benchmarks.
+//!
+//! Medium article demos live under `articles/` —
+//! `./scripts/reproduce-article.sh <slug>`.
 
 use flyby_simulator::{
     FaultSpec, PcapConfig, PcapSource, Scenario, SimScheduler, TrafficConfig, VirtualConsumer,
@@ -28,9 +21,16 @@ use flyby_storage::ReplayMode;
 
 fn main() {
     let mut args = std::env::args().skip(1).collect::<Vec<_>>();
+
     if args.first().map(String::as_str) == Some("pcap") {
         args.remove(0);
         run_pcap(&args);
+        return;
+    }
+
+    if args.first().map(String::as_str) == Some("tui") {
+        args.remove(0);
+        run_tui(&args);
         return;
     }
 
@@ -38,26 +38,46 @@ fn main() {
         .first()
         .cloned()
         .unwrap_or_else(|| "constant_rate".to_string());
+    let scenario = resolve_scenario(&scenario_name);
+    run_headless(scenario);
+}
 
-    let scenario = match scenario_name.as_str() {
-        "constant_rate" => Scenario::constant_rate(),
-        "market_open_burst" => Scenario::market_open_burst(),
-        "queue_overflow" => Scenario::queue_overflow(),
-        "packet_loss" => Scenario::packet_loss(),
-        "slow_consumer" => Scenario::slow_consumer(),
-        "corrupt_packets" => Scenario::corrupt_packets(),
-        "gaussian_rate" => Scenario::gaussian_rate(),
-        "protocol_quotes" => Scenario::protocol_quotes(),
-        other => {
-            eprintln!(
-                "Unknown scenario '{}'. Available: constant_rate, market_open_burst, queue_overflow, packet_loss, slow_consumer, corrupt_packets, gaussian_rate, protocol_quotes",
-                other
-            );
-            eprintln!("Or: flyby-sim pcap <path> [--full-speed]");
+fn resolve_scenario(name: &str) -> Scenario {
+    Scenario::by_name(name).unwrap_or_else(|| {
+        eprintln!(
+            "Unknown scenario '{}'. Available: {}",
+            name,
+            Scenario::builtin_names().join(", ")
+        );
+        eprintln!("Or: flyby-sim tui [scenario]");
+        eprintln!("Or: flyby-sim pcap <path> [--full-speed]");
+        eprintln!("Medium articles: ./scripts/reproduce-article.sh --list");
+        std::process::exit(1);
+    })
+}
+
+fn run_tui(args: &[String]) {
+    #[cfg(feature = "tui")]
+    {
+        let scenario_name = args
+            .first()
+            .cloned()
+            .unwrap_or_else(|| "constant_rate".to_string());
+        let scenario = resolve_scenario(&scenario_name);
+        if let Err(e) = flyby_simulator::tui::run_dashboard(scenario) {
+            eprintln!("TUI error: {e}");
             std::process::exit(1);
         }
-    };
+    }
+    #[cfg(not(feature = "tui"))]
+    {
+        let _ = args;
+        eprintln!("TUI support not enabled. Build with `--features tui` (default).");
+        std::process::exit(1);
+    }
+}
 
+fn run_headless(scenario: Scenario) {
     println!(
         "Running scenario '{}': {}",
         scenario.name, scenario.description
@@ -154,12 +174,10 @@ fn run_pcap(args: &[String]) {
     );
     println!("  Note     : results are SIMULATED (not hardware)");
 
-    // Duration: cover last timestamp + 1 ms, or 1s minimum for empty/full-speed.
     let last_ts = src
         .len()
         .checked_sub(1)
         .and_then(|i| {
-            // Re-load for duration estimate without consuming source state.
             flyby_simulator::load_pcap(&path)
                 .ok()
                 .map(|p| p[i].timestamp_ns)
@@ -172,7 +190,7 @@ fn run_pcap(args: &[String]) {
         name: "pcap_replay",
         description: "Classic pcap replay",
         duration,
-        tick_ns: 100_000, // 100 µs ticks for finer timing
+        tick_ns: 100_000,
         ..Scenario::default()
     };
 

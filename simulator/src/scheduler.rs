@@ -228,6 +228,36 @@ impl<E: EventSink> SimScheduler<E> {
         self.nics.push(Box::new(nic));
     }
 
+    /// Borrow current aggregate stats.
+    pub fn stats(&self) -> &SimStats {
+        &self.stats
+    }
+
+    /// Borrow the scenario configuration.
+    pub fn scenario(&self) -> &Scenario {
+        &self.scenario
+    }
+
+    /// `true` while a run is armed and not yet finished.
+    pub fn is_running(&self) -> bool {
+        self.running
+    }
+
+    /// `true` when educational pause is set.
+    pub fn is_paused(&self) -> bool {
+        self.edu.paused
+    }
+
+    /// Ring length, capacity, and occupancy when a ring is attached.
+    pub fn ring_occupancy(&self) -> Option<(usize, usize, f64)> {
+        self.ring.as_ref().map(|r| (r.len(), r.capacity(), r.occupancy()))
+    }
+
+    /// Cumulative consumer reads across all virtual consumers.
+    pub fn consumer_reads(&self) -> u64 {
+        self.consumers.iter().map(|c| c.reads()).sum()
+    }
+
     /// Inspect the last polled batch (educational mode).
     pub fn last_batch(&self) -> Option<&RawBatch> {
         self.last_batch.as_ref()
@@ -236,6 +266,11 @@ impl<E: EventSink> SimScheduler<E> {
     /// Current simulator clock reading, if a run is in progress.
     pub fn clock_ns(&self) -> Option<u64> {
         self.clock.as_ref().map(|c| c.now_ns())
+    }
+
+    /// Scenario duration in nanoseconds.
+    pub fn duration_ns(&self) -> u64 {
+        self.scenario.duration.as_nanos() as u64
     }
 
     /// Pause educational mode (further `run`/`resume` waits for `step`).

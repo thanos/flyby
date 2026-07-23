@@ -19,6 +19,7 @@
 //! - **[`SimEvent`]** / **[`EventSink`]**: structured event tracing.
 //! - **[`SimMetricKey`]**: metric namespace for the simulator subsystem.
 //! - **[`SimReplay`]**: virtual-clock adapter over storage replay modes.
+//! - **TUI dashboard** (feature `tui`): Ratatui view of queues, clock, events.
 //!
 //! ## Quick start
 //!
@@ -60,6 +61,9 @@ pub mod scenario;
 pub mod scheduler;
 pub mod storage;
 pub mod traffic;
+
+#[cfg(feature = "tui")]
+pub mod tui;
 
 // Flat re-exports for the most commonly used types.
 pub use clock::{ClockMode, SimClock};

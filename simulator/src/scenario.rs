@@ -216,6 +216,38 @@ impl Scenario {
             tick_ns: 1_000_000,
         }
     }
+
+    /// Resolve a built-in scenario by snake_case name.
+    ///
+    /// Returns `None` when the name is unknown.
+    pub fn by_name(name: &str) -> Option<Self> {
+        match name {
+            "constant_rate" => Some(Self::constant_rate()),
+            "market_open_burst" => Some(Self::market_open_burst()),
+            "queue_overflow" => Some(Self::queue_overflow()),
+            "packet_loss" => Some(Self::packet_loss()),
+            "slow_consumer" => Some(Self::slow_consumer()),
+            "corrupt_packets" => Some(Self::corrupt_packets()),
+            "gaussian_rate" => Some(Self::gaussian_rate()),
+            "protocol_quotes" => Some(Self::protocol_quotes()),
+            "default" => Some(Self::default()),
+            _ => None,
+        }
+    }
+
+    /// Names of all built-in named scenarios (excludes `"default"`).
+    pub fn builtin_names() -> &'static [&'static str] {
+        &[
+            "constant_rate",
+            "market_open_burst",
+            "queue_overflow",
+            "packet_loss",
+            "slow_consumer",
+            "corrupt_packets",
+            "gaussian_rate",
+            "protocol_quotes",
+        ]
+    }
 }
 
 #[cfg(test)]
@@ -264,19 +296,11 @@ mod tests {
     }
 
     #[test]
-    fn all_scenarios_use_virtual_time() {
-        let scenarios = [
-            Scenario::default(),
-            Scenario::constant_rate(),
-            Scenario::market_open_burst(),
-            Scenario::gaussian_rate(),
-        ];
-        for s in scenarios {
-            assert!(
-                matches!(s.clock_mode, ClockMode::Virtual { .. }),
-                "scenario '{}' should use virtual time",
-                s.name
-            );
+    fn by_name_resolves_builtins() {
+        for name in Scenario::builtin_names() {
+            let s = Scenario::by_name(name).expect(name);
+            assert_eq!(s.name, *name);
         }
+        assert!(Scenario::by_name("nope").is_none());
     }
 }

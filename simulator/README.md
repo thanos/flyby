@@ -29,7 +29,43 @@ cargo run -p flyby-simulator --bin flyby-sim -- pcap capture.pcap --full-speed
 
 Results are **simulated** and must not be quoted as hardware performance.
 
+## TUI dashboard
+
+```bash
+cargo run -p flyby-simulator --bin flyby-sim -- tui constant_rate
+cargo run -p flyby-simulator --bin flyby-sim -- tui packet_loss
+```
+
+Ratatui UI (feature `tui`, on by default): clock, queues, events, sparklines.
+
+| Key | Action |
+|---|---|
+| `Space` | Run / pause |
+| `s` | Step one tick |
+| `+/-` | Speed |
+| `r` | Restart |
+| `q` | Quit |
+
+Docs with screenshots: [docs/src/simulator.md](../docs/src/simulator.md#tui-dashboard).
+
+Regenerate doc screenshots:
+
+```bash
+cargo run -p flyby-simulator --example render_tui_docs
+```
+
+## Medium articles
+
+Publishing hooks (scenario, screenshots, git tag) live in `articles/` at the
+repo root — not in this crate. Reproduce with:
+
+```bash
+./scripts/reproduce-article.sh --list
+./scripts/reproduce-article.sh part-vi-simulator-intro
+```
+
 ## Documentation
 
-See [docs/src/simulator.md](../docs/src/simulator.md) and Part VI of the
-master specification.
+See [docs/src/simulator.md](../docs/src/simulator.md),
+[docs/src/articles.md](../docs/src/articles.md), and Part VI of the master
+specification.
