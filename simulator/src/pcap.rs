@@ -272,6 +272,15 @@ impl<E: EventSink> PcapSource<E> {
         ns
     }
 
+    /// Traffic hot-swap is a no-op for pcap replay sources.
+    pub fn set_traffic(&mut self, _traffic: crate::traffic::TrafficConfig) {}
+
+    /// Replace the fault injection policy (timeline / DSL hot-swap).
+    pub fn set_fault(&mut self, fault: FaultSpec) {
+        self.config.fault = fault.clone();
+        self.fault = FaultInjector::new(fault, self.config.fault_seed);
+    }
+
     /// Arm single-step replay.
     pub fn advance_replay(&mut self) {
         self.replay.advance();

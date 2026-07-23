@@ -1,0 +1,31 @@
+# Steady 100 kpps — parity with Scenario::constant_rate()
+[scenario]
+name        = "constant_rate"
+description = "Steady 100 kpps, no faults, 1 second virtual time."
+duration    = "1s"
+tick        = "1ms"
+clock       = "virtual"
+mode        = "trace"
+seed        = 0
+simulated   = true
+
+[[nic]]
+name       = "nic0"
+batch_size = 128
+udp_port   = 9000
+
+[nic.traffic]
+pattern = "fixed"
+pps     = 100000
+
+[nic.payload]
+kind = "fixed_seq"
+size = 8
+
+[fabric]
+name  = "ring0"
+slots = 4096
+
+[[consumer]]
+name = "c0"
+max_per_drain = "unlimited"

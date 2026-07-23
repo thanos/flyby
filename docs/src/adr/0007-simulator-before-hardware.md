@@ -27,8 +27,11 @@ in hardware integration.  The simulator provides:
 - **SimScheduler**: drives virtual time ticks, polls all virtual sources,
   and returns aggregate statistics without sleeping.
 - **Scenario presets**: named, version-controlled configurations
-  (`constant_rate`, `market_open_burst`, `packet_loss`, etc.).
+  (`constant_rate`, `market_open_burst`, `packet_loss`, etc.) plus the
+  FlyScenario DSL (`scenarios/*.fly.toml`, optional Rhai scripts).
 - **Deterministic fault injection**: LCG-seeded, fully reproducible.
+- **Observability**: events, metrics, educational step controls, and a
+  Ratatui TUI dashboard (`flyby-sim tui`).
 
 ## Consequences
 

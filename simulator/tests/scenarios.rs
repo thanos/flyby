@@ -334,8 +334,8 @@ fn pcap_source_replays_through_scheduler() {
     .unwrap();
 
     let scenario = Scenario {
-        name: "pcap_test",
-        description: "pcap integration",
+        name: "pcap_test".into(),
+        description: "pcap integration".into(),
         duration: Duration::from_millis(10),
         tick_ns: 1_000_000,
         ..Scenario::default()

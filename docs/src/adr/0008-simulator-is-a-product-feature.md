@@ -21,13 +21,13 @@ Treat the FlyBy simulator as a product feature, not internal test plumbing:
    standard as the pipeline types.  Users can build custom scenarios, register
    custom NICs via `DynNic`, and plug in their own `EventSink`.
 
-2. **Binary**: `flyby-simulator` ships as a CLI binary.  Users can run named
-   scenarios (`flyby-simulator constant_rate`) to benchmark their pipeline
-   code without writing any Rust.
+2. **Binary**: the `flyby-sim` CLI (`flyby-simulator` package) runs named
+   built-in scenarios (`flyby-sim constant_rate`) and FlyScenario DSL files
+   (`flyby-sim run scenarios/….fly.toml`) without writing Rust.
 
-3. **Scenario versioning**: built-in scenarios are part of the public API.
-   Changes to scenario defaults are breaking changes and follow semantic
-   versioning.
+3. **Scenario versioning**: built-in scenarios and the FlyScenario DSL IR are
+   part of the public surface. Changes to scenario defaults or breaking DSL
+   fields follow semantic versioning.
 
 4. **Integration tests**: the simulator's integration test suite (`tests/scenarios.rs`)
    is part of the CI gate, not an afterthought.

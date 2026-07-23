@@ -136,6 +136,21 @@ impl<E: EventSink> VirtualNic<E> {
         ns
     }
 
+    /// Replace traffic pattern / payload generator (timeline / DSL hot-swap).
+    pub fn set_traffic(&mut self, traffic: TrafficConfig) {
+        self.payloads = PayloadGenerator::new(traffic.payload.clone());
+        let max_payload = self.payloads.max_payload_len(traffic.payload_size);
+        self.payload_buf.resize(max_payload.max(1), 0);
+        self.pacer = TrafficPacer::new(traffic.clone());
+        self.config.traffic = traffic;
+    }
+
+    /// Replace the fault injection policy (timeline / DSL hot-swap).
+    pub fn set_fault(&mut self, fault: FaultSpec) {
+        self.config.fault = fault.clone();
+        self.fault = FaultInjector::new(fault, self.config.fault_seed);
+    }
+
     fn emit(&self, kind: SimEventKind) {
         self.events.emit(SimEvent {
             clock_ns: self.clock_ns,

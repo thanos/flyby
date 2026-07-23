@@ -35,6 +35,7 @@
 # Workflows
 
 - [Simulator](./simulator.md)
+- [FlyScenario DSL](./scenario-dsl.md)
 - [Medium articles](./articles.md)
 - [Benchmarks](./benchmarks.md)
 

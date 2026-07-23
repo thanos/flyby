@@ -25,5 +25,5 @@ mod app;
 mod snapshot;
 mod ui;
 
-pub use app::run_dashboard;
+pub use app::{run_dashboard, run_dashboard_compiled};
 pub use snapshot::{render_text_frame, text_frame_to_svg};

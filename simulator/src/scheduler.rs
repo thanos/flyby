@@ -33,6 +33,7 @@ use crate::events::{EventSink, NullEventSink, SimEvent, SimEventKind};
 use crate::metrics::SimMetricKey;
 use crate::ring::VirtualSharedMemory;
 use crate::scenario::Scenario;
+use crate::timeline::TimelineAction;
 
 /// Cumulative statistics for one simulation run.
 #[derive(Debug, Clone, Default)]
@@ -59,6 +60,8 @@ pub struct SimStats {
 
 /// Object-safe trait for type-erased NICs inside the scheduler.
 pub trait DynNic: Send {
+    /// Source name (for timeline / DSL targeting).
+    fn name(&self) -> &str;
     /// Initialise the NIC (open sockets, allocate buffers).
     fn init(&mut self) -> flyby_core::Result<()>;
     /// Shut down the NIC and release resources.
@@ -69,6 +72,10 @@ pub trait DynNic: Send {
     fn poll(&mut self, batch: &mut RawBatch) -> flyby_core::Result<usize>;
     /// Drain accumulated latency-spike nanoseconds.
     fn take_spike_ns(&mut self) -> u64;
+    /// Hot-swap traffic config (no-op for replay sources).
+    fn set_traffic(&mut self, traffic: crate::traffic::TrafficConfig);
+    /// Hot-swap fault injection policy.
+    fn set_fault(&mut self, fault: crate::fault::FaultSpec);
     /// Cumulative packets generated since last `init`.
     fn packets_generated(&self) -> u64;
     /// Cumulative packets dropped by fault injection since last `init`.
@@ -81,6 +88,9 @@ impl<E> DynNic for crate::nic::VirtualNic<E>
 where
     E: EventSink + Send,
 {
+    fn name(&self) -> &str {
+        crate::nic::VirtualNic::name(self)
+    }
     fn init(&mut self) -> flyby_core::Result<()> {
         flyby_core::Lifecycle::init(self)
     }
@@ -95,6 +105,12 @@ where
     }
     fn take_spike_ns(&mut self) -> u64 {
         crate::nic::VirtualNic::take_spike_ns(self)
+    }
+    fn set_traffic(&mut self, traffic: crate::traffic::TrafficConfig) {
+        crate::nic::VirtualNic::set_traffic(self, traffic);
+    }
+    fn set_fault(&mut self, fault: crate::fault::FaultSpec) {
+        crate::nic::VirtualNic::set_fault(self, fault);
     }
     fn packets_generated(&self) -> u64 {
         self.packets_generated
@@ -111,6 +127,9 @@ impl<E> DynNic for crate::pcap::PcapSource<E>
 where
     E: EventSink + Send,
 {
+    fn name(&self) -> &str {
+        crate::pcap::PcapSource::name(self)
+    }
     fn init(&mut self) -> flyby_core::Result<()> {
         flyby_core::Lifecycle::init(self)
     }
@@ -125,6 +144,12 @@ where
     }
     fn take_spike_ns(&mut self) -> u64 {
         crate::pcap::PcapSource::take_spike_ns(self)
+    }
+    fn set_traffic(&mut self, traffic: crate::traffic::TrafficConfig) {
+        crate::pcap::PcapSource::set_traffic(self, traffic);
+    }
+    fn set_fault(&mut self, fault: crate::fault::FaultSpec) {
+        crate::pcap::PcapSource::set_fault(self, fault);
     }
     fn packets_generated(&self) -> u64 {
         self.packets_generated
@@ -160,6 +185,10 @@ pub struct SimScheduler<E: EventSink> {
     ring: Option<VirtualSharedMemory>,
     consumers: Vec<VirtualConsumer>,
     edu: EduControls,
+    /// Sorted timeline actions (by `at_ns`).
+    timeline: Vec<TimelineAction>,
+    /// Next timeline index to apply.
+    timeline_idx: usize,
     /// Last delivered batch (for educational packet inspection).
     last_batch: Option<RawBatch>,
     /// Internal clock retained across educational steps.
@@ -187,6 +216,8 @@ impl<E: EventSink> SimScheduler<E> {
             ring: None,
             consumers: Vec::new(),
             edu: EduControls::default(),
+            timeline: Vec::new(),
+            timeline_idx: 0,
             last_batch: None,
             clock: None,
             wall_start: None,
@@ -215,6 +246,14 @@ impl<E: EventSink> SimScheduler<E> {
     /// Replace educational controls.
     pub fn with_edu(mut self, edu: EduControls) -> Self {
         self.edu = edu;
+        self
+    }
+
+    /// Attach a sorted (or unsorted) timeline of DSL / script actions.
+    pub fn with_timeline(mut self, mut actions: Vec<TimelineAction>) -> Self {
+        actions.sort_by_key(|a| a.at_ns());
+        self.timeline = actions;
+        self.timeline_idx = 0;
         self
     }
 
@@ -329,6 +368,8 @@ impl<E: EventSink> SimScheduler<E> {
             self.running = false;
             return Ok(false);
         }
+
+        self.apply_timeline(now_ns);
 
         if let Some(bp) = self.edu.breakpoint_ns {
             if now_ns >= bp {
@@ -455,15 +496,54 @@ impl<E: EventSink> SimScheduler<E> {
         self.clock = Some(SimClock::new(self.scenario.clock_mode.clone()));
         self.wall_start = Some(Instant::now());
         self.stats = SimStats::default();
+        self.timeline_idx = 0;
         self.running = true;
 
         self.events.emit(SimEvent {
             clock_ns: 0,
             kind: SimEventKind::SimulatorStarted {
-                scenario: self.scenario.name.to_string(),
+                scenario: self.scenario.name.clone(),
             },
         });
+        self.apply_timeline(0);
         Ok(())
+    }
+
+    fn apply_timeline(&mut self, now_ns: u64) {
+        while self.timeline_idx < self.timeline.len() {
+            if self.timeline[self.timeline_idx].at_ns() > now_ns {
+                break;
+            }
+            let action = self.timeline[self.timeline_idx].clone();
+            self.timeline_idx += 1;
+            match action {
+                TimelineAction::SetTraffic { nic, traffic, .. } => {
+                    for n in &mut self.nics {
+                        if n.name() == nic {
+                            n.set_traffic(traffic.clone());
+                        }
+                    }
+                }
+                TimelineAction::SetFault { nic, fault, .. } => {
+                    for n in &mut self.nics {
+                        if n.name() == nic {
+                            n.set_fault(fault.clone());
+                        }
+                    }
+                }
+                TimelineAction::SlowConsumer {
+                    consumer,
+                    max_per_drain,
+                    ..
+                } => {
+                    for c in &mut self.consumers {
+                        if c.name() == consumer {
+                            c.set_max_per_drain(max_per_drain);
+                        }
+                    }
+                }
+            }
+        }
     }
 
     fn finish(&mut self) -> flyby_core::Result<()> {

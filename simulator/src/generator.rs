@@ -11,7 +11,7 @@ use std::sync::Arc;
 /// Ethernet (14) + IPv4 (20) + UDP (8) header size used by synthetic frames.
 pub const NET_HEADER_LEN: usize = 42;
 
-/// User callback that fills a payload buffer for packet `seq`.
+/// User-supplied payload fill callback: `(sequence, payload_buf)`.
 pub type CustomPayloadFn = dyn Fn(u64, &mut [u8]) + Send + Sync;
 
 /// How the virtual NIC fills packet payloads.

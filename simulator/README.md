@@ -14,9 +14,11 @@ NVMe hardware. See ADR-007 and ADR-008.
 - **SimClock** — real time or deterministic virtual time
 - **FaultInjector** — deterministic drop / corrupt / latency spikes
 - **SimScheduler** — tick loop with optional shared-memory ring + consumers
+  and timed timeline actions
 - **SimReplay** — virtual-clock adapter over `flyby_storage::ReplayMode`
 - **EduControls** — pause, single-step, breakpoints, batch inspection
-- **Scenarios** — version-controlled presets
+- **Scenarios** — built-in Rust presets + FlyScenario DSL (TOML + Rhai)
+- **TUI** — Ratatui dashboard (`flyby-sim tui`)
 
 ## Quick start
 
@@ -25,9 +27,24 @@ cargo run -p flyby-simulator --bin flyby-sim -- constant_rate
 cargo run -p flyby-simulator --bin flyby-sim -- gaussian_rate
 cargo run -p flyby-simulator --bin flyby-sim -- protocol_quotes
 cargo run -p flyby-simulator --bin flyby-sim -- pcap capture.pcap --full-speed
+
+# FlyScenario DSL
+cargo run -p flyby-simulator --bin flyby-sim -- run scenarios/constant_rate.fly.toml
+cargo run -p flyby-simulator --bin flyby-sim -- run scenarios/rhai_drop_ramp.fly.toml
+cargo run -p flyby-simulator --bin flyby-sim -- tui scenarios/market_open_lossy.fly.toml
 ```
 
 Results are **simulated** and must not be quoted as hardware performance.
+
+## FlyScenario DSL
+
+TOML scenario files (`scenarios/*.fly.toml`) plus optional Rhai `[script]`
+blocks compile to the same `SimScheduler` path as built-in presets.
+
+| Docs | Link |
+|---|---|
+| Overview + CLI | [docs/src/simulator.md](../docs/src/simulator.md) |
+| Full language reference | [docs/src/scenario-dsl.md](../docs/src/scenario-dsl.md) |
 
 ## TUI dashboard
 
@@ -66,6 +83,9 @@ repo root — not in this crate. Reproduce with:
 
 ## Documentation
 
-See [docs/src/simulator.md](../docs/src/simulator.md),
-[docs/src/articles.md](../docs/src/articles.md), and Part VI of the master
-specification.
+| Page | Contents |
+|---|---|
+| [Simulator](../docs/src/simulator.md) | Architecture, components, builtins, TUI, faults, events |
+| [FlyScenario DSL](../docs/src/scenario-dsl.md) | TOML + Rhai field reference |
+| [Medium articles](../docs/src/articles.md) | Reproduce-with-one-command catalog |
+| ADR-007 / ADR-008 | Product decisions |

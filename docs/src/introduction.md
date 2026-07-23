@@ -45,5 +45,7 @@ defining abstraction of the project.
 
 - [Getting started](./getting-started.md) for a first running pipeline.
 - [Architecture overview](./architecture.md) for the system shape.
+- [Simulator](./simulator.md) and [FlyScenario DSL](./scenario-dsl.md) for
+  hardware-free development.
 - [Concepts](./concepts/README.md) for one page per core abstraction.
 - The API reference: `cargo doc --workspace --open`.

@@ -1,0 +1,55 @@
+# Open burst, then 5% loss, slow consumer mid-run
+[scenario]
+name        = "market_open_lossy"
+description = "Open burst, then 5% loss, slow consumer mid-run"
+duration    = "2s"
+tick        = "1ms"
+clock       = "virtual"
+mode        = "trace"
+seed        = 1
+simulated   = true
+
+[[nic]]
+name       = "nic0"
+batch_size = 256
+
+[nic.traffic]
+pattern    = "burst"
+burst_size = 10000
+gap        = "1ms"
+
+[nic.payload]
+kind   = "protocol"
+proto  = "market_quote"
+symbol = "AAPL"
+
+[nic.fault]
+drop_rate = 0.0
+seed      = 1
+
+[fabric]
+name  = "ring0"
+slots = 1024
+
+[[consumer]]
+name = "c0"
+max_per_drain = "unlimited"
+
+[[timeline]]
+at = "200ms"
+action = "set_fault"
+nic = "nic0"
+drop_rate = 0.05
+
+[[timeline]]
+at = "500ms"
+action = "set_traffic"
+nic = "nic0"
+pattern = "fixed"
+pps = 20000
+
+[[timeline]]
+at = "800ms"
+action = "slow_consumer"
+consumer = "c0"
+max_per_drain = 4

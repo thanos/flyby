@@ -37,7 +37,9 @@ flyby/
 ├── examples/
 ├── benches/
 ├── docs/
-└── simulator/
+├── scenarios/            # FlyScenario DSL tutorial files (*.fly.toml)
+├── articles/             # Medium reproduction catalog
+└── simulator/            # First-class simulator (flyby-sim CLI)
 ```
 
 The `flyby` crate re-exports the public API. Users should normally write:
@@ -84,4 +86,6 @@ Every subsystem must teach:
 - **when not** to use it,
 - and **how** to measure it.
 
-The documentation is considered part of the implementation.
+The documentation is considered part of the implementation. Start with the
+[Simulator](./simulator.md) for the product overview and the
+[FlyScenario DSL](./scenario-dsl.md) for declarative tutorials.

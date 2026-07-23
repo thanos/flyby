@@ -8,7 +8,8 @@ the stable trait model.
 | Backend     | Trait target        | Feature     | Platform | Status            |
 |-------------|---------------------|-------------|----------|-------------------|
 | Shared mem  | `Sink`              | `memory`    | any      | **implemented**   |
-| Simulator   | `Source` (net)      | always*     | any      | **implemented**   |
+| Net sim     | `NetworkSource`     | always*     | any      | **implemented**   |
+| Product sim | full pipeline sim   | (workspace) | any      | **implemented**†  |
 | File        | `StorageSource`     | always*     | any      | **implemented**   |
 | AF_XDP      | `Source`            | `af_xdp`    | Linux    | stub              |
 | DPDK        | `Source`            | `dpdk`      | Linux    | stub              |
@@ -18,6 +19,11 @@ the stable trait model.
 \* Portable file and net-sim APIs always compile via `flyby-storage` /
 `flyby-net`; the facade re-exports them as `flyby::storage` /
 `flyby::net`. The `simulator` feature only toggles a builder selector.
+
+† The product simulator is the `flyby-simulator` workspace crate
+(`flyby-sim` CLI, TUI, FlyScenario DSL). It shares the same source traits
+as production backends — see [Simulator](../simulator.md) and
+[FlyScenario DSL](../scenario-dsl.md).
 
 Heavy dependencies are never enabled by default. Each backend page
 explains **why** it exists, **how** it works, **where** it fits, **when
