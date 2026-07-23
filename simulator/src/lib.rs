@@ -70,11 +70,14 @@ pub use clock::{ClockMode, SimClock};
 pub use consumer::VirtualConsumer;
 pub use events::{EventSink, NullEventSink, SimEvent, SimEventKind, VecEventSink};
 pub use fault::{FaultInjector, FaultSpec};
-pub use generator::{PayloadGenerator, PayloadSpec, ProtocolMessage, build_udp_frame};
+pub use generator::{
+    CustomPayloadFn, PayloadGenerator, PayloadSpec, ProtocolMessage, build_udp_frame,
+};
 pub use metrics::SimMetricKey;
 pub use nic::{VirtualNic, VirtualNicConfig};
 pub use pcap::{
-    PcapConfig, PcapPacket, PcapSource, load_pcap, parse_pcap, write_pcap_bytes, write_pcap_bytes_ex,
+    PcapConfig, PcapPacket, PcapSource, load_pcap, parse_pcap, write_pcap_bytes,
+    write_pcap_bytes_ex,
 };
 pub use replay::SimReplay;
 pub use ring::{RingError, VirtualSharedMemory};

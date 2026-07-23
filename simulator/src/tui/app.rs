@@ -206,13 +206,15 @@ impl Dashboard {
         self.event_cursor = self.sink.len();
         let quiet = self.mode == RunMode::Auto && self.ticks_per_frame > 1;
         for ev in new_events {
-            if quiet && matches!(
-                ev.kind,
-                SimEventKind::PacketGenerated { .. }
-                    | SimEventKind::SlotWritten { .. }
-                    | SimEventKind::ConsumerRead { .. }
-                    | SimEventKind::TickCompleted { .. }
-            ) {
+            if quiet
+                && matches!(
+                    ev.kind,
+                    SimEventKind::PacketGenerated { .. }
+                        | SimEventKind::SlotWritten { .. }
+                        | SimEventKind::ConsumerRead { .. }
+                        | SimEventKind::TickCompleted { .. }
+                )
+            {
                 continue;
             }
             // Even at ×1 auto, skip per-packet noise — keep faults + lifecycle.
@@ -436,7 +438,10 @@ mod tests {
     fn format_event_includes_drop() {
         let line = format_event(&SimEvent {
             clock_ns: 1_000_000,
-            kind: SimEventKind::PacketDropped { nic: "nic0", seq: 7 },
+            kind: SimEventKind::PacketDropped {
+                nic: "nic0",
+                seq: 7,
+            },
         });
         assert!(line.contains("DROP"));
         assert!(line.contains("nic0"));

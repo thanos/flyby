@@ -250,7 +250,9 @@ impl<E: EventSink> SimScheduler<E> {
 
     /// Ring length, capacity, and occupancy when a ring is attached.
     pub fn ring_occupancy(&self) -> Option<(usize, usize, f64)> {
-        self.ring.as_ref().map(|r| (r.len(), r.capacity(), r.occupancy()))
+        self.ring
+            .as_ref()
+            .map(|r| (r.len(), r.capacity(), r.occupancy()))
     }
 
     /// Cumulative consumer reads across all virtual consumers.

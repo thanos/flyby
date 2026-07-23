@@ -382,10 +382,8 @@ fn fixture_udp_quotes_and_ns() {
 
 #[test]
 fn fixture_empty_pcap() {
-    let packets = flyby_simulator::load_pcap(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/fixtures/empty.pcap"
-    ))
-    .unwrap();
+    let packets =
+        flyby_simulator::load_pcap(concat!(env!("CARGO_MANIFEST_DIR"), "/fixtures/empty.pcap"))
+            .unwrap();
     assert!(packets.is_empty());
 }

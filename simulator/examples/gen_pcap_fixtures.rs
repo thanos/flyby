@@ -64,9 +64,8 @@ fn main() {
     write("burst_100.pcap", &write_pcap_bytes(&burst_refs));
 
     // 4) UDP market-quote frames (matches ProtocolMessage::MarketQuote).
-    let mut quote_gen = PayloadGenerator::new(PayloadSpec::Protocol(ProtocolMessage::market_quote(
-        "AAPL",
-    )));
+    let mut quote_gen =
+        PayloadGenerator::new(PayloadSpec::Protocol(ProtocolMessage::market_quote("AAPL")));
     let mut quote_frames = Vec::new();
     for seq in 1..=20u64 {
         let mut payload = [0u8; 34];
@@ -98,9 +97,8 @@ fn main() {
     );
 
     // 6) Longer capture for CLI demos: 1 second of 1 kpps UDP quotes.
-    let mut long_gen = PayloadGenerator::new(PayloadSpec::Protocol(ProtocolMessage::market_quote(
-        "MSFT",
-    )));
+    let mut long_gen =
+        PayloadGenerator::new(PayloadSpec::Protocol(ProtocolMessage::market_quote("MSFT")));
     let mut long_frames = Vec::new();
     for seq in 1..=1_000u64 {
         let mut payload = [0u8; 34];
@@ -116,6 +114,12 @@ fn main() {
 
     println!("\nFixtures ready in {}", dir.display());
     println!("Try:");
-    println!("  cargo run -p flyby-simulator --bin flyby-sim -- pcap {}/tiny_3pkt.pcap --full-speed", dir.display());
-    println!("  cargo run -p flyby-simulator --bin flyby-sim -- pcap {}/udp_quotes.pcap", dir.display());
+    println!(
+        "  cargo run -p flyby-simulator --bin flyby-sim -- pcap {}/tiny_3pkt.pcap --full-speed",
+        dir.display()
+    );
+    println!(
+        "  cargo run -p flyby-simulator --bin flyby-sim -- pcap {}/udp_quotes.pcap",
+        dir.display()
+    );
 }
