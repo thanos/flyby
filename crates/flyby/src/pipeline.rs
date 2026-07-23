@@ -180,7 +180,7 @@ where
 /// Hash the message [`SchemaId`] onto sinks.
 pub type SchemaHashPlacement<M> = HashPlacement<M, fn(&M) -> u64>;
 
-/// Hash the message [`SchemaId`][crate::api::SchemaId] onto sinks.
+/// Hash the message [`SchemaId`] onto sinks.
 pub fn schema_hash_placement<M: Message>(sinks: Vec<SinkId>) -> Result<SchemaHashPlacement<M>> {
     HashPlacement::new(sinks, |m: &M| u64::from(m.schema_id().id()))
 }
