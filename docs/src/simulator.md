@@ -11,27 +11,29 @@ the simulator share the same source traits; only the adapters differ.
 ## Architecture
 
 ```text
-Virtual NICs      Virtual Storage
-      │                  │
-      └──────────┬───────┘
-                 ▼
-          Source Adapters
-                 ▼
-           Raw Batch Stream
-                 ▼
-        Virtual Shared Memory
-                 ▼
-        Virtual Consumers
+Virtual NICs / Pcap      Virtual Storage
+      │                         │
+      └────────────┬────────────┘
+                   ▼
+            Source Adapters
+                   ▼
+             Raw Batch Stream
+                   ▼
+          Virtual Shared Memory
+                   ▼
+          Virtual Consumers
 ```
 
 ## Components
 
 | Type | Role |
 |---|---|
-| `VirtualNic` | `NetworkSource` with traffic pacing + fault injection |
+| `VirtualNic` | `NetworkSource` with traffic pacing + payload generators + faults |
+| `PcapSource` | Classic pcap ingest with `SimReplay` timing |
 | `VirtualStorageSource` | `StorageSource` wrapping `FileSource` + faults |
 | `SimClock` | Real time or deterministic virtual time |
-| `TrafficPacer` | Fixed-rate / burst / full-speed emission |
+| `TrafficPacer` | Fixed-rate / burst / Gaussian / full-speed emission |
+| `PayloadSpec` | Fixed-seq, random, Gaussian size, protocol-aware, custom callbacks |
 | `FaultInjector` | LCG-seeded drop, corrupt, latency spikes |
 | `SimScheduler` | Tick loop, metrics, optional ring + consumers |
 | `VirtualSharedMemory` | In-process SPSC byte-slot ring |
@@ -39,67 +41,154 @@ Virtual NICs      Virtual Storage
 | `SimReplay` | Virtual-clock adapter over storage `ReplayMode` |
 | `Scenario` | Version-controlled run presets |
 | `EduControls` | Pause, step, breakpoints, batch inspection |
+| TUI dashboard | Ratatui view of clock, queues, events, sparklines |
 
-## CLI
+## Traffic generators
+
+```rust,ignore
+use flyby_simulator::{PayloadSpec, ProtocolMessage, TrafficConfig, TrafficPattern};
+
+// Gaussian arrivals
+let gaussian = TrafficConfig::gaussian_rate();
+
+// Protocol-aware binary quotes
+let quotes = TrafficConfig {
+    pattern: TrafficPattern::FixedRate { pps: 10_000 },
+    payload_size: 34,
+    batch_size: 64,
+    payload: PayloadSpec::Protocol(ProtocolMessage::market_quote("AAPL")),
+};
+
+// Custom callback
+use std::sync::Arc;
+let custom = TrafficConfig {
+    payload: PayloadSpec::Custom(Arc::new(|seq, buf| {
+        buf.fill(0);
+        buf[0] = (seq & 0xFF) as u8;
+    })),
+    ..TrafficConfig::default()
+};
+```
+
+## Pcap ingest
+
+Classic pcap only (not pcap-ng). Convert with `editcap -F pcap` if needed.
+
+```bash
+cargo run -p flyby-simulator --bin flyby-sim -- pcap capture.pcap --full-speed
+```
+
+```rust,ignore
+use flyby_simulator::{PcapConfig, PcapSource, load_pcap, NullEventSink};
+use flyby_storage::ReplayMode;
+
+let packets = load_pcap("capture.pcap")?;
+let src = PcapSource::new(
+    packets,
+    PcapConfig { replay: ReplayMode::OriginalTiming, ..Default::default() },
+    NullEventSink,
+)?;
+```
+
+## CLI (headless)
 
 ```bash
 cargo run -p flyby-simulator --bin flyby-sim -- constant_rate
+cargo run -p flyby-simulator --bin flyby-sim -- gaussian_rate
+cargo run -p flyby-simulator --bin flyby-sim -- protocol_quotes
 ```
 
 Available scenarios: `constant_rate`, `market_open_burst`, `queue_overflow`,
-`packet_loss`, `slow_consumer`, `corrupt_packets`.
+`packet_loss`, `slow_consumer`, `corrupt_packets`, `gaussian_rate`,
+`protocol_quotes`.
 
 Throughput numbers from the CLI are **simulated**.
 
-## Library example
+## TUI dashboard
 
-```rust,ignore
-use flyby_simulator::{
-    Scenario, SimScheduler, VirtualNic, VirtualNicConfig, NullEventSink,
-    VirtualSharedMemory, VirtualConsumer,
-};
+The Ratatui dashboard is the interactive way to watch a scenario: clock,
+ring occupancy, drop counters, event flow, and sparklines. Feature `tui`
+is enabled by default.
 
-let scenario = Scenario::packet_loss();
-let mut sched = SimScheduler::new(scenario.clone())
-    .with_ring(VirtualSharedMemory::new("ring0", 1024, 128));
-sched.add_nic(VirtualNic::new(
-    VirtualNicConfig {
-        traffic: scenario.traffic.clone(),
-        fault: scenario.fault.clone(),
-        ..Default::default()
-    },
-    NullEventSink,
-));
-sched.add_consumer(VirtualConsumer::new("c0"));
-let stats = sched.run()?;
-assert!(stats.packets_dropped > 0);
+### Launch
+
+```bash
+# Steady baseline
+cargo run -p flyby-simulator --bin flyby-sim -- tui constant_rate
+
+# Fault injection (watch drop %)
+cargo run -p flyby-simulator --bin flyby-sim -- tui packet_loss
+
+# Tiny ring — occupancy / overflow pressure
+cargo run -p flyby-simulator --bin flyby-sim -- tui queue_overflow
+
+# Protocol-aware payloads
+cargo run -p flyby-simulator --bin flyby-sim -- tui protocol_quotes
 ```
 
-## Educational mode
+Requires a real terminal (not all CI log scrapers). For headless builds
+without Ratatui: `--no-default-features`.
 
-```rust,ignore
-use flyby_simulator::{EduControls, Scenario, SimScheduler};
+### Keyboard controls
 
-let mut sched = SimScheduler::new(Scenario::constant_rate())
-    .with_edu(EduControls { paused: true, ..Default::default() });
-sched.run()?;          // arms the run without ticking
-sched.step()?;         // one tick
-let batch = sched.last_batch();
-sched.finish_run()?;
+| Key | Action |
+|---|---|
+| `Space` | Toggle auto-run / pause |
+| `s` or `→` | Single-step one scheduler tick |
+| `+` / `-` | Increase / decrease ticks per UI frame |
+| `r` | Restart the scenario from tick 0 |
+| `q` or `Esc` | Quit (also `Ctrl-C`) |
+
+Suggested first session: start paused → press `s` a few times → `Space` to
+auto-run → `+` to speed up → `q` to exit.
+
+### What each pane shows
+
+1. **Header** — scenario name, PAUSED/AUTO/DONE badge, **\[SIMULATED\]** label  
+2. **Simulator clock** — virtual-time progress through the scenario duration  
+3. **Pipeline / queues** — packets generated/dropped/corrupted, SHM writes,
+   consumer reads, ring fill, last batch size  
+4. **Ring occupancy** — gauge for shared-memory back-pressure  
+5. **Event flow** — recent faults, ticks, lifecycle (quieter during fast auto-run)  
+6. **Sparklines** — packets per tick and tick wall-latency (ns)  
+7. **Footer** — status line + key hints  
+
+### Screenshots
+
+Captured from the live dashboard via the TestBackend (regenerate with
+`cargo run -p flyby-simulator --example render_tui_docs`).
+
+**Paused at start** (`constant_rate`):
+
+![TUI paused on constant_rate](./images/tui/01-paused-constant-rate.svg)
+
+**After stepping** (`packet_loss` — note the drop counter):
+
+![TUI packet_loss after steps](./images/tui/02-packet-loss-stepped.svg)
+
+**Ring pressure** (`queue_overflow`):
+
+![TUI queue_overflow](./images/tui/03-queue-overflow.svg)
+
+Plain-text copies of the same frames live beside the SVGs in
+[`docs/src/images/tui/`](./images/tui/) for diff-friendly reviews.
+
+### Regenerating screenshots
+
+```bash
+cargo run -p flyby-simulator --example render_tui_docs
 ```
 
-## Replay
+## Medium articles
 
-Use `SimReplay` with `flyby_storage::ReplayMode` so original / scaled /
-single-step / burst timing works against the simulator clock:
+Publishing hooks live under `articles/` (catalog + screenshots + expected
+output). Reproduce a post with:
 
-```rust,ignore
-use flyby_simulator::SimReplay;
-use flyby_storage::ReplayMode;
-
-let mut replay = SimReplay::new(ReplayMode::TimeScaled { factor: 0.5 })?;
-assert!(replay.ready_at(record_ts_ns, clock_ns));
+```bash
+./scripts/reproduce-article.sh part-vi-simulator-intro
 ```
+
+See [Medium articles](./articles.md).
 
 ## When not to use it
 

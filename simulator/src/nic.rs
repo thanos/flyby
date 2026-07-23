@@ -1,8 +1,11 @@
 //! Virtual NIC: a [`NetworkSource`] implementation backed by the simulator.
 //!
-//! [`VirtualNic`] wraps [`SimulatedNetSource`] and adds:
+//! [`VirtualNic`] generates synthetic Ethernet/IP/UDP frames and adds:
 //!
-//! - **Traffic pacing**: [`TrafficPacer`] limits packets per scheduler tick.
+//! - **Traffic pacing**: [`TrafficPacer`] limits packets per scheduler tick
+//!   (fixed-rate, burst, Gaussian, full-speed).
+//! - **Payload generators**: fixed-seq, random, Gaussian size, protocol-aware,
+//!   and custom callbacks via [`PayloadSpec`][crate::generator::PayloadSpec].
 //! - **Fault injection**: drop and corrupt packets via [`FaultInjector`];
 //!   dropped packets are removed from the delivered batch.
 //! - **Event tracing**: emits a [`SimEvent`] for every packet generated,
@@ -17,17 +20,15 @@
 //! ```text
 //! Lifecycle + NetworkSource
 //! ```
-//!
-//! Pipeline code that accepts `impl NetworkSource` works identically with a
-//! `VirtualNic` and with a real backend.
 
 use std::sync::Arc;
 
 use flyby_core::{Error, ErrorKind, Lifecycle, MetricsCollector, NullCollector, Result};
-use flyby_net::{NetworkSource, PushResult, RawBatch, SimNetConfig, SimulatedNetSource};
+use flyby_net::{NetworkSource, PacketMeta, PushResult, RawBatch};
 
 use crate::events::{EventSink, SimEvent, SimEventKind};
 use crate::fault::{FaultInjector, FaultSpec};
+use crate::generator::{NET_HEADER_LEN, PayloadGenerator, build_udp_frame};
 use crate::metrics::SimMetricKey;
 use crate::traffic::{TrafficConfig, TrafficPacer};
 
@@ -42,6 +43,8 @@ pub struct VirtualNicConfig {
     pub fault: FaultSpec,
     /// Seed for the fault injector LCG (controls reproducibility).
     pub fault_seed: u64,
+    /// UDP destination port written into synthetic frames.
+    pub udp_dst_port: u16,
 }
 
 impl Default for VirtualNicConfig {
@@ -51,24 +54,21 @@ impl Default for VirtualNicConfig {
             traffic: TrafficConfig::default(),
             fault: FaultSpec::default(),
             fault_seed: 0,
+            udp_dst_port: 9000,
         }
     }
 }
 
 /// A simulated network interface card.
-///
-/// Implements [`NetworkSource`] so it is interchangeable with real AF_XDP
-/// or DPDK backends.  Create one per simulated NIC; pass to the pipeline's
-/// `poll_batch` loop.
 pub struct VirtualNic<E: EventSink> {
     config: VirtualNicConfig,
-    inner: SimulatedNetSource,
-    /// Scratch batch filled by the inner source before fault filtering.
-    scratch: RawBatch,
     pacer: TrafficPacer,
+    payloads: PayloadGenerator,
     fault: FaultInjector,
     events: E,
     metrics: Arc<dyn MetricsCollector>,
+    /// Scratch buffer for payload fill.
+    payload_buf: Vec<u8>,
     /// Total packets emitted (pre-fault-injection).
     pub packets_generated: u64,
     /// Packets dropped by fault injection.
@@ -96,25 +96,18 @@ impl<E: EventSink> VirtualNic<E> {
         events: E,
         metrics: Arc<dyn MetricsCollector>,
     ) -> Self {
-        let frame_size = 42 + config.traffic.payload_size.max(1);
-        let batch_cap = config.traffic.batch_size.max(1);
-        let sim_config = SimNetConfig {
-            batch_size: batch_cap,
-            payload_size: config.traffic.payload_size,
-            drop_rate: 0.0, // fault injection handled here, not in inner source
-            idle_rate: 0.0,
-            udp_dst_port: 9000,
-        };
+        let payloads = PayloadGenerator::new(config.traffic.payload.clone());
+        let max_payload = payloads.max_payload_len(config.traffic.payload_size);
         let fault = FaultInjector::new(config.fault.clone(), config.fault_seed);
         let pacer = TrafficPacer::new(config.traffic.clone());
         Self {
-            inner: SimulatedNetSource::new(sim_config),
-            scratch: RawBatch::new(batch_cap, frame_size),
             pacer,
+            payloads,
             config,
             fault,
             events,
             metrics,
+            payload_buf: vec![0u8; max_payload],
             packets_generated: 0,
             packets_dropped: 0,
             packets_corrupted: 0,
@@ -131,9 +124,6 @@ impl<E: EventSink> VirtualNic<E> {
     }
 
     /// Provide tick context used by the next [`poll_batch`][NetworkSource::poll_batch].
-    ///
-    /// The scheduler calls this before each poll so the NIC can pace traffic
-    /// and stamp events with the simulator clock.
     pub fn set_tick_context(&mut self, tick_ns: u64, clock_ns: u64) {
         self.tick_ns = tick_ns;
         self.clock_ns = clock_ns;
@@ -152,16 +142,27 @@ impl<E: EventSink> VirtualNic<E> {
             kind,
         });
     }
+
+    fn max_frame_size(&self) -> usize {
+        NET_HEADER_LEN
+            + self
+                .payloads
+                .max_payload_len(self.config.traffic.payload_size)
+    }
 }
 
 impl<E: EventSink> Lifecycle for VirtualNic<E> {
     fn init(&mut self) -> Result<()> {
-        self.inner.init()?;
         self.packets_generated = 0;
         self.packets_dropped = 0;
         self.packets_corrupted = 0;
         self.pending_spike_ns = 0;
         self.pacer = TrafficPacer::new(self.config.traffic.clone());
+        self.payloads = PayloadGenerator::new(self.config.traffic.payload.clone());
+        let max_payload = self
+            .payloads
+            .max_payload_len(self.config.traffic.payload_size);
+        self.payload_buf.resize(max_payload, 0);
         self.initialized = true;
         self.emit(SimEventKind::SimulatorStarted {
             scenario: self.config.name.to_string(),
@@ -170,7 +171,6 @@ impl<E: EventSink> Lifecycle for VirtualNic<E> {
     }
 
     fn shutdown(&mut self) -> Result<()> {
-        self.inner.shutdown()?;
         self.initialized = false;
         Ok(())
     }
@@ -189,30 +189,22 @@ impl<E: EventSink> NetworkSource for VirtualNic<E> {
         }
 
         let intended = self.pacer.packets_for_tick(self.tick_ns);
+        let frame_size = self.max_frame_size();
+        batch.reset(frame_size);
         if intended == 0 {
-            batch.reset(42 + self.config.traffic.payload_size.max(1));
             return Ok(0);
         }
 
-        self.inner.set_batch_size(intended);
-        let raw_count = self.inner.poll_batch(&mut self.scratch)?;
-
         let name = self.config.name;
-        let frame_size = 42 + self.config.traffic.payload_size.max(1);
-        batch.reset(frame_size);
-
-        // Snapshot scratch slots so we can mutate payloads independently.
-        let packets: Vec<(Vec<u8>, flyby_net::PacketMeta)> = self
-            .scratch
-            .packets()
-            .take(raw_count)
-            .map(|(data, meta)| (data.to_vec(), *meta))
-            .collect();
-
+        let port = self.config.udp_dst_port;
         let mut delivered = 0usize;
         let mut bytes = 0u64;
 
-        for (i, (mut payload, mut meta)) in packets.into_iter().enumerate() {
+        for i in 0..intended {
+            if delivered >= batch.capacity() {
+                break;
+            }
+
             self.packets_generated += 1;
             let seq = self.packets_generated;
 
@@ -225,8 +217,19 @@ impl<E: EventSink> NetworkSource for VirtualNic<E> {
                 continue;
             }
 
+            let payload_cap = self.payload_buf.len();
+            let payload_len = self
+                .payloads
+                .fill(seq, &mut self.payload_buf[..payload_cap]);
+            let mut frame = build_udp_frame(&self.payload_buf[..payload_len], port);
+
             if self.fault.should_corrupt() {
-                self.fault.corrupt_payload(&mut payload);
+                // Corrupt payload region only (skip headers when possible).
+                if frame.len() > NET_HEADER_LEN {
+                    self.fault.corrupt_payload(&mut frame[NET_HEADER_LEN..]);
+                } else {
+                    self.fault.corrupt_payload(&mut frame);
+                }
                 self.packets_corrupted += 1;
                 self.emit(SimEventKind::PacketCorrupted { nic: name, seq });
                 self.metrics
@@ -238,15 +241,19 @@ impl<E: EventSink> NetworkSource for VirtualNic<E> {
                 self.pending_spike_ns = self.pending_spike_ns.saturating_add(spike);
             }
 
-            // Prefer simulator clock over the inner source's synthetic stamp.
-            meta.timestamp_ns = self.clock_ns.saturating_add(i as u64);
-            match batch.push(&payload, meta) {
+            let meta = PacketMeta {
+                timestamp_ns: self.clock_ns.saturating_add(i as u64),
+                queue_id: 0,
+                original_len: frame.len().min(u32::MAX as usize) as u32,
+            };
+
+            match batch.push(&frame, meta) {
                 PushResult::Ok | PushResult::Truncated => {
                     delivered += 1;
-                    bytes += payload.len() as u64;
+                    bytes += frame.len() as u64;
                     self.emit(SimEventKind::PacketGenerated {
                         nic: name,
-                        len: payload.len(),
+                        len: frame.len(),
                         seq,
                     });
                 }
@@ -257,6 +264,7 @@ impl<E: EventSink> NetworkSource for VirtualNic<E> {
                     self.emit(SimEventKind::PacketDropped { nic: name, seq });
                     self.metrics
                         .record_counter(&SimMetricKey::PacketsDropped, 1);
+                    break;
                 }
             }
         }
@@ -280,6 +288,7 @@ impl<E: EventSink> NetworkSource for VirtualNic<E> {
 mod tests {
     use super::*;
     use crate::events::{NullEventSink, VecEventSink};
+    use crate::generator::{PayloadSpec, ProtocolMessage};
     use crate::traffic::TrafficPattern;
 
     fn make_nic(fault: FaultSpec) -> VirtualNic<VecEventSink> {
@@ -311,6 +320,7 @@ mod tests {
                 batch_size: 4,
                 payload_size: 8,
                 pattern: TrafficPattern::FullSpeed,
+                payload: PayloadSpec::FixedSeq,
             },
             fault: FaultSpec::default(),
             ..VirtualNicConfig::default()
@@ -339,11 +349,11 @@ mod tests {
             ..FaultSpec::default()
         });
         nic.init().unwrap();
-        // Force full-speed so we attempt packets even with FixedRate default.
         nic.pacer = TrafficPacer::new(TrafficConfig {
             pattern: TrafficPattern::FullSpeed,
             batch_size: 8,
             payload_size: 8,
+            payload: PayloadSpec::FixedSeq,
         });
         nic.set_tick_context(1_000_000, 0);
 
@@ -363,6 +373,7 @@ mod tests {
                 pattern: TrafficPattern::FullSpeed,
                 batch_size: 4,
                 payload_size: 16,
+                payload: PayloadSpec::FixedSeq,
             },
             fault: FaultSpec {
                 corrupt_rate: 1.0,
@@ -398,6 +409,7 @@ mod tests {
             pattern: TrafficPattern::FullSpeed,
             batch_size: 2,
             payload_size: 8,
+            payload: PayloadSpec::FixedSeq,
         });
         nic.set_tick_context(1_000_000, 0);
         let mut batch = RawBatch::new(8, 128);
@@ -414,13 +426,34 @@ mod tests {
             pattern: TrafficPattern::FixedRate { pps: 1 },
             batch_size: 64,
             payload_size: 8,
+            payload: PayloadSpec::FixedSeq,
         });
-        // 1 pps needs 1s; a 1 µs tick yields 0 packets
         nic.set_tick_context(1_000, 0);
         let mut batch = RawBatch::new(8, 128);
         let n = nic.poll_batch(&mut batch).unwrap();
         assert_eq!(n, 0);
         assert!(batch.is_empty());
+    }
+
+    #[test]
+    fn protocol_quote_payload_in_frame() {
+        let cfg = VirtualNicConfig {
+            traffic: TrafficConfig {
+                pattern: TrafficPattern::FullSpeed,
+                batch_size: 1,
+                payload_size: 34,
+                payload: PayloadSpec::Protocol(ProtocolMessage::market_quote("AAPL")),
+            },
+            ..VirtualNicConfig::default()
+        };
+        let mut nic = VirtualNic::new(cfg, NullEventSink);
+        nic.init().unwrap();
+        nic.set_tick_context(1_000_000, 0);
+        let mut batch = RawBatch::new(4, 128);
+        nic.poll_batch(&mut batch).unwrap();
+        let (data, _) = batch.packets().next().unwrap();
+        assert_eq!(data[NET_HEADER_LEN], b'Q');
+        assert_eq!(&data[NET_HEADER_LEN + 2..NET_HEADER_LEN + 6], b"AAPL");
     }
 
     #[test]
@@ -434,12 +467,13 @@ mod tests {
     #[test]
     fn shutdown_then_reinit_resets_counters() {
         let mut nic = make_nic(FaultSpec::default());
+        nic.init().unwrap();
         nic.pacer = TrafficPacer::new(TrafficConfig {
             pattern: TrafficPattern::FullSpeed,
             batch_size: 4,
             payload_size: 8,
+            payload: PayloadSpec::FixedSeq,
         });
-        nic.init().unwrap();
         nic.set_tick_context(1_000_000, 0);
         let mut batch = RawBatch::new(4, 128);
         nic.poll_batch(&mut batch).unwrap();

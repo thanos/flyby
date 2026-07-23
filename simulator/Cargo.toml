@@ -11,12 +11,16 @@ description = "First-class FlyBy simulator: virtual NICs, storage, scenarios, an
 publish = false
 
 [features]
-default = []
+default = ["tui"]
+## Ratatui dashboard (`flyby-sim tui`).
+tui = ["dep:ratatui", "dep:crossterm"]
 
 [dependencies]
 flyby-core    = { workspace = true }
 flyby-net     = { workspace = true }
 flyby-storage = { workspace = true }
+ratatui       = { version = "0.29", optional = true }
+crossterm     = { version = "0.28", optional = true }
 
 [dev-dependencies]
 tempfile = "3"

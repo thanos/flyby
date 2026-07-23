@@ -19,6 +19,7 @@
 //! - **[`SimEvent`]** / **[`EventSink`]**: structured event tracing.
 //! - **[`SimMetricKey`]**: metric namespace for the simulator subsystem.
 //! - **[`SimReplay`]**: virtual-clock adapter over storage replay modes.
+//! - **TUI dashboard** (feature `tui`): Ratatui view of queues, clock, events.
 //!
 //! ## Quick start
 //!
@@ -50,8 +51,10 @@ pub mod clock;
 pub mod consumer;
 pub mod events;
 pub mod fault;
+pub mod generator;
 pub mod metrics;
 pub mod nic;
+pub mod pcap;
 pub mod replay;
 pub mod ring;
 pub mod scenario;
@@ -59,13 +62,23 @@ pub mod scheduler;
 pub mod storage;
 pub mod traffic;
 
+#[cfg(feature = "tui")]
+pub mod tui;
+
 // Flat re-exports for the most commonly used types.
 pub use clock::{ClockMode, SimClock};
 pub use consumer::VirtualConsumer;
 pub use events::{EventSink, NullEventSink, SimEvent, SimEventKind, VecEventSink};
 pub use fault::{FaultInjector, FaultSpec};
+pub use generator::{
+    CustomPayloadFn, PayloadGenerator, PayloadSpec, ProtocolMessage, build_udp_frame,
+};
 pub use metrics::SimMetricKey;
 pub use nic::{VirtualNic, VirtualNicConfig};
+pub use pcap::{
+    PcapConfig, PcapPacket, PcapSource, load_pcap, parse_pcap, write_pcap_bytes,
+    write_pcap_bytes_ex,
+};
 pub use replay::SimReplay;
 pub use ring::{RingError, VirtualSharedMemory};
 pub use scenario::Scenario;

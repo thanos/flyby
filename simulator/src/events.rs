@@ -196,6 +196,29 @@ impl VecEventSink {
     pub fn is_empty(&self) -> bool {
         self.events.lock().unwrap().is_empty()
     }
+
+    /// Clear all collected events.
+    pub fn clear(&self) {
+        self.events.lock().unwrap().clear();
+    }
+
+    /// Return events starting at `from` (inclusive), without removing them.
+    pub fn events_from(&self, from: usize) -> Vec<SimEvent> {
+        let guard = self.events.lock().unwrap();
+        if from >= guard.len() {
+            return Vec::new();
+        }
+        guard[from..].to_vec()
+    }
+
+    /// Retain only the last `max` events (drops oldest).
+    pub fn truncate_to(&self, max: usize) {
+        let mut guard = self.events.lock().unwrap();
+        if guard.len() > max {
+            let drop_n = guard.len() - max;
+            guard.drain(0..drop_n);
+        }
+    }
 }
 
 impl EventSink for VecEventSink {
