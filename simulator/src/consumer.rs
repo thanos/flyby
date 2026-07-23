@@ -48,6 +48,13 @@ impl VirtualConsumer {
         self.reads
     }
 
+    /// Update the per-drain budget (timeline / DSL hot-swap).
+    ///
+    /// Use [`usize::MAX`] for an unlimited (fast) consumer.
+    pub fn set_max_per_drain(&mut self, max_per_drain: usize) {
+        self.max_per_drain = max_per_drain.max(1);
+    }
+
     /// Drain up to `limit.min(max_per_drain)` slots from `ring`.
     ///
     /// Returns the number of slots consumed.

@@ -334,8 +334,8 @@ fn pcap_source_replays_through_scheduler() {
     .unwrap();
 
     let scenario = Scenario {
-        name: "pcap_test",
-        description: "pcap integration",
+        name: "pcap_test".into(),
+        description: "pcap integration".into(),
         duration: Duration::from_millis(10),
         tick_ns: 1_000_000,
         ..Scenario::default()
@@ -382,10 +382,8 @@ fn fixture_udp_quotes_and_ns() {
 
 #[test]
 fn fixture_empty_pcap() {
-    let packets = flyby_simulator::load_pcap(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/fixtures/empty.pcap"
-    ))
-    .unwrap();
+    let packets =
+        flyby_simulator::load_pcap(concat!(env!("CARGO_MANIFEST_DIR"), "/fixtures/empty.pcap"))
+            .unwrap();
     assert!(packets.is_empty());
 }

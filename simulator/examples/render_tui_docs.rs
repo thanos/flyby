@@ -10,8 +10,8 @@ use std::fs;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use flyby_simulator::tui::{render_text_frame, text_frame_to_svg};
 use flyby_simulator::Scenario;
+use flyby_simulator::tui::{render_text_frame, text_frame_to_svg};
 
 fn docs_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../docs/src/images/tui")

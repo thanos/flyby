@@ -35,13 +35,59 @@ Virtual NICs / Pcap      Virtual Storage
 | `TrafficPacer` | Fixed-rate / burst / Gaussian / full-speed emission |
 | `PayloadSpec` | Fixed-seq, random, Gaussian size, protocol-aware, custom callbacks |
 | `FaultInjector` | LCG-seeded drop, corrupt, latency spikes |
-| `SimScheduler` | Tick loop, metrics, optional ring + consumers |
+| `SimScheduler` | Tick loop, metrics, optional ring + consumers, timeline |
 | `VirtualSharedMemory` | In-process SPSC byte-slot ring |
 | `VirtualConsumer` | Drains the ring (supports slow-consumer mode) |
 | `SimReplay` | Virtual-clock adapter over storage `ReplayMode` |
-| `Scenario` | Version-controlled run presets |
+| `Scenario` | Built-in Rust run presets |
+| FlyScenario DSL | TOML + optional Rhai → same runtime — [full reference](./scenario-dsl.md) |
+| `TimelineAction` | Timed traffic / fault / consumer mutations |
 | `EduControls` | Pause, step, breakpoints, batch inspection |
 | TUI dashboard | Ratatui view of clock, queues, events, sparklines |
+
+## CLI cheat sheet
+
+```text
+flyby-sim [builtin]                 # headless built-in preset
+flyby-sim run <file.fly.toml>       # headless FlyScenario DSL
+flyby-sim <path/to/file.fly.toml>   # same (path auto-detected)
+flyby-sim tui [builtin|file]        # Ratatui dashboard
+flyby-sim pcap <path> [--full-speed]
+```
+
+```bash
+cargo run -p flyby-simulator --bin flyby-sim -- constant_rate
+cargo run -p flyby-simulator --bin flyby-sim -- run scenarios/constant_rate.fly.toml
+cargo run -p flyby-simulator --bin flyby-sim -- tui packet_loss
+cargo run -p flyby-simulator --bin flyby-sim -- pcap simulator/fixtures/tiny_3pkt.pcap --full-speed
+```
+
+Throughput and latency numbers from the CLI are **simulated**.
+
+## Built-in scenarios
+
+| Name | Description |
+|---|---|
+| `constant_rate` | Steady 100 kpps, no faults, 1 s |
+| `market_open_burst` | 10k-packet bursts with 1 ms gap, 5 s |
+| `queue_overflow` | Full-speed + tiny ring → measurable overflow |
+| `packet_loss` | 10 kpps with 5% drop |
+| `slow_consumer` | 1 kpps with latency spikes (slow drain in CLI) |
+| `corrupt_packets` | 1% payload corruption |
+| `gaussian_rate` | Gaussian arrivals ~ N(50k, 10k) pps |
+| `protocol_quotes` | Binary market-quote payloads (AAPL) |
+
+Resolve in Rust with `Scenario::by_name` / `Scenario::builtin_names()`.
+
+## Tutorial DSL scenarios
+
+Checked-in files under [`scenarios/`](../../scenarios/):
+
+| File | Shows |
+|---|---|
+| `constant_rate.fly.toml` | Minimal NIC + fabric + consumer |
+| `market_open_lossy.fly.toml` | Burst traffic + `[[timeline]]` faults / slowdown |
+| `rhai_drop_ramp.fly.toml` | Phase 3 Rhai `[script]` ramp |
 
 ## Traffic generators
 
@@ -70,9 +116,51 @@ let custom = TrafficConfig {
 };
 ```
 
+Patterns: **fixed-rate**, **burst**, **Gaussian**, **full-speed**.
+Payloads: **fixed-seq**, **random**, **Gaussian size**, **protocol**, **custom**.
+
+## Fault injection
+
+Every injected fault is observable (`SimEvent` + counters):
+
+| Fault | Effect |
+|---|---|
+| Drop | Packet removed from the delivered batch |
+| Corrupt | One payload byte flipped |
+| Latency spike | Virtual time advances by `latency_spike_ns` |
+
+```rust,ignore
+use flyby_simulator::FaultSpec;
+
+let fault = FaultSpec {
+    drop_rate: 0.05,
+    corrupt_rate: 0.01,
+    latency_spike_rate: 0.10,
+    latency_spike_ns: 500_000,
+};
+```
+
+Same rates appear in FlyScenario as `[nic.fault]` / timeline `set_fault`.
+
+## Virtual time
+
+| Mode | Behaviour |
+|---|---|
+| `ClockMode::Virtual` | Time advances only on scheduler ticks (+ spikes) |
+| `ClockMode::RealTime` | Wall clock |
+
+Virtual time is the default for deterministic tests and CI.
+
+## Virtual shared memory and consumers
+
+`SimScheduler::with_ring` attaches an in-process SPSC byte-slot ring.
+`VirtualConsumer` drains it each tick; `VirtualConsumer::slow` limits
+slots per drain to exercise back-pressure and overflow.
+
 ## Pcap ingest
 
 Classic pcap only (not pcap-ng). Convert with `editcap -F pcap` if needed.
+Fixtures live under `simulator/fixtures/`.
 
 ```bash
 cargo run -p flyby-simulator --bin flyby-sim -- pcap capture.pcap --full-speed
@@ -90,19 +178,59 @@ let src = PcapSource::new(
 )?;
 ```
 
-## CLI (headless)
+Replay modes (also via DSL `[[pcap]] replay = …`): `FullSpeed`,
+`OriginalTiming`, `TimeScaled`, `Burst`, `SingleStep` — driven by
+`SimReplay` against the simulator clock.
 
-```bash
-cargo run -p flyby-simulator --bin flyby-sim -- constant_rate
-cargo run -p flyby-simulator --bin flyby-sim -- gaussian_rate
-cargo run -p flyby-simulator --bin flyby-sim -- protocol_quotes
+## Events and metrics
+
+- **Events** — `EventSink` (`NullEventSink` / `VecEventSink`); kinds cover
+  packet gen/drop/corrupt, ring write/overflow, consumer read, ticks,
+  lifecycle.
+- **Metrics** — `SimMetricKey` (`sim.*` namespace) via `MetricsCollector`.
+
+Use `NullEventSink` for quiet benchmark runs.
+
+## Educational controls
+
+```rust,ignore
+use flyby_simulator::{EduControls, SimScheduler};
+
+let mut sched = SimScheduler::new(scenario).with_edu(EduControls {
+    paused: true,
+    breakpoint_tick: Some(10),
+    ..EduControls::default()
+});
+sched.run()?;          // arms without ticking while paused
+while sched.step()? {} // single-step
+sched.finish_run()?;
 ```
 
-Available scenarios: `constant_rate`, `market_open_burst`, `queue_overflow`,
-`packet_loss`, `slow_consumer`, `corrupt_packets`, `gaussian_rate`,
-`protocol_quotes`.
+`last_batch()` exposes the most recent delivered batch for inspection.
+The TUI maps Space / `s` onto pause and step.
 
-Throughput numbers from the CLI are **simulated**.
+## FlyScenario DSL
+
+Declarative TOML under `scenarios/*.fly.toml` (optional Rhai `[script]`)
+compiles to the same scheduler. Language surface:
+
+| Construct | Purpose |
+|---|---|
+| `[scenario]` | name, duration, tick, clock, mode, seed |
+| `[[nic]]` | virtual NIC + traffic / payload / fault |
+| `[[pcap]]` | classic pcap replay |
+| `[fabric]` | virtual shared-memory ring |
+| `[[consumer]]` | drain budget (`"unlimited"` or N) |
+| `[[timeline]]` | timed `set_traffic` / `set_fault` / `slow_consumer` |
+| `[script]` | Phase 3 Rhai → timeline actions |
+
+**Full field reference, Rhai API, and end-to-end examples:**
+[FlyScenario DSL](./scenario-dsl.md).
+
+```bash
+cargo run -p flyby-simulator --bin flyby-sim -- run scenarios/market_open_lossy.fly.toml
+cargo run -p flyby-simulator --bin flyby-sim -- run scenarios/rhai_drop_ramp.fly.toml
+```
 
 ## TUI dashboard
 
@@ -124,6 +252,9 @@ cargo run -p flyby-simulator --bin flyby-sim -- tui queue_overflow
 
 # Protocol-aware payloads
 cargo run -p flyby-simulator --bin flyby-sim -- tui protocol_quotes
+
+# FlyScenario DSL file
+cargo run -p flyby-simulator --bin flyby-sim -- tui scenarios/market_open_lossy.fly.toml
 ```
 
 Requires a real terminal (not all CI log scrapers). For headless builds
@@ -195,7 +326,10 @@ See [Medium articles](./articles.md).
 Do not quote simulator throughput or latency as production figures. Use it
 for correctness, relative comparisons, tutorials, and CI.
 
-## Related ADRs
+## Related
 
+- [FlyScenario DSL](./scenario-dsl.md)
+- [Medium articles](./articles.md)
 - [ADR-0007: Simulator before hardware](./adr/0007-simulator-before-hardware.md)
 - [ADR-0008: Simulator is a product feature](./adr/0008-simulator-is-a-product-feature.md)
+- Crate README: [`simulator/README.md`](../../simulator/README.md)

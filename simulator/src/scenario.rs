@@ -34,13 +34,14 @@ use std::time::Duration;
 /// A complete simulation scenario.
 ///
 /// All fields are `pub` so scenarios can be created and modified inline
-/// without a builder.
+/// without a builder.  Names are owned [`String`]s so scenarios can be
+/// loaded from the FlyScenario DSL as well as built-in presets.
 #[derive(Debug, Clone)]
 pub struct Scenario {
     /// Short identifier (snake_case).
-    pub name: &'static str,
+    pub name: String,
     /// Human-readable description.
-    pub description: &'static str,
+    pub description: String,
     /// Traffic generation configuration.
     pub traffic: TrafficConfig,
     /// Fault injection policy.
@@ -56,8 +57,8 @@ pub struct Scenario {
 impl Default for Scenario {
     fn default() -> Self {
         Self {
-            name: "default",
-            description: "Default scenario: 1 kpps, no faults, 1 second.",
+            name: "default".into(),
+            description: "Default scenario: 1 kpps, no faults, 1 second.".into(),
             traffic: TrafficConfig::default(),
             fault: FaultSpec::default(),
             duration: Duration::from_secs(1),
@@ -73,8 +74,8 @@ impl Scenario {
         use crate::generator::PayloadSpec;
         use crate::traffic::TrafficPattern;
         Self {
-            name: "constant_rate",
-            description: "Steady 100 kpps, no faults, 1 second virtual time.",
+            name: "constant_rate".into(),
+            description: "Steady 100 kpps, no faults, 1 second virtual time.".into(),
             traffic: TrafficConfig {
                 pattern: TrafficPattern::FixedRate { pps: 100_000 },
                 payload_size: 8,
@@ -91,8 +92,8 @@ impl Scenario {
     /// 10 000-packet burst then 1 ms gap, 5 seconds virtual duration.
     pub fn market_open_burst() -> Self {
         Self {
-            name: "market_open_burst",
-            description: "10k-packet bursts with 1 ms gap, 5 seconds.",
+            name: "market_open_burst".into(),
+            description: "10k-packet bursts with 1 ms gap, 5 seconds.".into(),
             traffic: TrafficConfig::market_open_burst(),
             fault: FaultSpec::default(),
             duration: Duration::from_secs(5),
@@ -106,8 +107,8 @@ impl Scenario {
         use crate::generator::PayloadSpec;
         use crate::traffic::TrafficPattern;
         Self {
-            name: "queue_overflow",
-            description: "Saturating rate with a tiny ring to trigger overflow.",
+            name: "queue_overflow".into(),
+            description: "Saturating rate with a tiny ring to trigger overflow.".into(),
             traffic: TrafficConfig {
                 pattern: TrafficPattern::FullSpeed,
                 payload_size: 8,
@@ -126,8 +127,8 @@ impl Scenario {
         use crate::generator::PayloadSpec;
         use crate::traffic::TrafficPattern;
         Self {
-            name: "packet_loss",
-            description: "10 kpps with 5% random drop rate.",
+            name: "packet_loss".into(),
+            description: "10 kpps with 5% random drop rate.".into(),
             traffic: TrafficConfig {
                 pattern: TrafficPattern::FixedRate { pps: 10_000 },
                 payload_size: 8,
@@ -149,8 +150,8 @@ impl Scenario {
         use crate::generator::PayloadSpec;
         use crate::traffic::TrafficPattern;
         Self {
-            name: "slow_consumer",
-            description: "1 kpps with 10% 500 µs latency spikes.",
+            name: "slow_consumer".into(),
+            description: "1 kpps with 10% 500 µs latency spikes.".into(),
             traffic: TrafficConfig {
                 pattern: TrafficPattern::FixedRate { pps: 1_000 },
                 payload_size: 8,
@@ -173,8 +174,8 @@ impl Scenario {
         use crate::generator::PayloadSpec;
         use crate::traffic::TrafficPattern;
         Self {
-            name: "corrupt_packets",
-            description: "1 kpps with 1% packet corruption rate.",
+            name: "corrupt_packets".into(),
+            description: "1 kpps with 1% packet corruption rate.".into(),
             traffic: TrafficConfig {
                 pattern: TrafficPattern::FixedRate { pps: 1_000 },
                 payload_size: 32,
@@ -194,8 +195,8 @@ impl Scenario {
     /// Gaussian arrival process around 50 kpps for 1 virtual second.
     pub fn gaussian_rate() -> Self {
         Self {
-            name: "gaussian_rate",
-            description: "Gaussian arrivals ~ N(50k, 10k) pps, 1 second.",
+            name: "gaussian_rate".into(),
+            description: "Gaussian arrivals ~ N(50k, 10k) pps, 1 second.".into(),
             traffic: TrafficConfig::gaussian_rate(),
             fault: FaultSpec::default(),
             duration: Duration::from_secs(1),
@@ -207,8 +208,8 @@ impl Scenario {
     /// Protocol-aware binary market quotes at 10 kpps.
     pub fn protocol_quotes() -> Self {
         Self {
-            name: "protocol_quotes",
-            description: "10 kpps binary market-quote payloads (AAPL).",
+            name: "protocol_quotes".into(),
+            description: "10 kpps binary market-quote payloads (AAPL).".into(),
             traffic: TrafficConfig::protocol_quotes(),
             fault: FaultSpec::default(),
             duration: Duration::from_secs(1),
@@ -299,7 +300,7 @@ mod tests {
     fn by_name_resolves_builtins() {
         for name in Scenario::builtin_names() {
             let s = Scenario::by_name(name).expect(name);
-            assert_eq!(s.name, *name);
+            assert_eq!(s.name, *name); // String == &str
         }
         assert!(Scenario::by_name("nope").is_none());
     }

@@ -99,7 +99,11 @@ fn draw_clock(frame: &mut Frame<'_>, area: Rect, state: &DashState) {
         state.ticks_per_frame
     );
     let gauge = Gauge::default()
-        .block(Block::default().borders(Borders::ALL).title("Simulator clock"))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title("Simulator clock"),
+        )
         .gauge_style(Style::default().fg(Color::Cyan).bg(Color::DarkGray))
         .ratio(ratio)
         .label(label);
@@ -122,8 +126,10 @@ fn draw_stats(frame: &mut Frame<'_>, area: Rect, state: &DashState) {
         100.0 * s.packets_dropped as f64 / s.packets_generated as f64
     };
     let lines = vec![
-        Line::from(format!("packets   gen={}  drop={} ({drop_pct:.1}%)  corrupt={}",
-            s.packets_generated, s.packets_dropped, s.packets_corrupted)),
+        Line::from(format!(
+            "packets   gen={}  drop={} ({drop_pct:.1}%)  corrupt={}",
+            s.packets_generated, s.packets_dropped, s.packets_corrupted
+        )),
         Line::from(format!(
             "shm       written={}  consumed={}  overflow={}",
             s.slots_written, s.slots_consumed, s.ring_overflows
@@ -149,7 +155,11 @@ fn draw_stats(frame: &mut Frame<'_>, area: Rect, state: &DashState) {
     );
 
     let gauge = Gauge::default()
-        .block(Block::default().borders(Borders::ALL).title("Ring occupancy"))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title("Ring occupancy"),
+        )
         .gauge_style(Style::default().fg(Color::Yellow).bg(Color::DarkGray))
         .ratio(ring_gauge_ratio);
     frame.render_widget(gauge, chunks[1]);
@@ -219,35 +229,42 @@ fn draw_charts(frame: &mut Frame<'_>, area: Rect, state: &DashState) {
 
 fn draw_footer(frame: &mut Frame<'_>, area: Rect, state: &DashState) {
     let line = Line::from(vec![
-        Span::styled(
-            " ",
-            Style::default(),
-        ),
+        Span::styled(" ", Style::default()),
         Span::raw(state.status.clone()),
         Span::raw("   "),
         Span::styled(
             "Space",
-            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
         ),
         Span::raw(" run/pause  "),
         Span::styled(
             "s",
-            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
         ),
         Span::raw(" step  "),
         Span::styled(
             "+/-",
-            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
         ),
         Span::raw(" speed  "),
         Span::styled(
             "r",
-            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
         ),
         Span::raw(" restart  "),
         Span::styled(
             "q",
-            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
         ),
         Span::raw(" quit"),
     ]);

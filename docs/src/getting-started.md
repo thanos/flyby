@@ -28,7 +28,7 @@ cargo build --workspace --features af_xdp,io_uring
 cargo run -p flyby-examples --bin hello_pipeline
 ```
 
-## Simulator TUI
+## Simulator
 
 Interactive Ratatui dashboard (clock, queues, events, sparklines):
 
@@ -38,8 +38,15 @@ cargo run -p flyby-simulator --bin flyby-sim -- tui constant_rate
 
 Keys: `Space` run/pause · `s` step · `+/-` speed · `r` restart · `q` quit.
 
-See [Simulator → TUI dashboard](./simulator.md#tui-dashboard) for screenshots
-and a full key reference.
+Headless built-in or FlyScenario DSL file:
+
+```sh
+cargo run -p flyby-simulator --bin flyby-sim -- constant_rate
+cargo run -p flyby-simulator --bin flyby-sim -- run scenarios/constant_rate.fly.toml
+```
+
+See [Simulator](./simulator.md) (TUI screenshots, components) and
+[FlyScenario DSL](./scenario-dsl.md) (TOML + Rhai reference).
 
 ## Checks
 

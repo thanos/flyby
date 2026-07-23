@@ -11,11 +11,15 @@ use std::sync::Arc;
 /// Ethernet (14) + IPv4 (20) + UDP (8) header size used by synthetic frames.
 pub const NET_HEADER_LEN: usize = 42;
 
+/// User-supplied payload fill callback: `(sequence, payload_buf)`.
+pub type CustomPayloadFn = dyn Fn(u64, &mut [u8]) + Send + Sync;
+
 /// How the virtual NIC fills packet payloads.
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub enum PayloadSpec {
     /// Fixed-size payload: big-endian sequence number in the first 8 bytes,
     /// remaining bytes zero. Matches [`flyby_net::SimulatedNetSource`].
+    #[default]
     FixedSeq,
 
     /// Deterministic pseudo-random payload bytes (LCG-seeded).
@@ -44,7 +48,7 @@ pub enum PayloadSpec {
     ///
     /// Wrapped in [`Arc`] so [`PayloadSpec`] / [`TrafficConfig`](crate::traffic::TrafficConfig)
     /// remain `Clone`.
-    Custom(Arc<dyn Fn(u64, &mut [u8]) + Send + Sync>),
+    Custom(Arc<CustomPayloadFn>),
 }
 
 impl fmt::Debug for PayloadSpec {
@@ -67,12 +71,6 @@ impl fmt::Debug for PayloadSpec {
             Self::Protocol(p) => f.debug_tuple("Protocol").field(p).finish(),
             Self::Custom(_) => write!(f, "Custom(..)"),
         }
-    }
-}
-
-impl Default for PayloadSpec {
-    fn default() -> Self {
-        Self::FixedSeq
     }
 }
 

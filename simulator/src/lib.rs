@@ -14,6 +14,8 @@
 //!   [`VirtualSharedMemory`] ring, and drains [`VirtualConsumer`]s.
 //! - **[`Scenario`]**: declarative run configuration; built-in presets for
 //!   common workloads.
+//! - **FlyScenario DSL** ([`dsl`]): TOML scenario files + optional Rhai
+//!   `[script]` blocks compiled onto the same runtime.
 //! - **[`SimClock`]**: real-time or virtual-time clock for deterministic tests.
 //! - **[`FaultInjector`]**: LCG-based deterministic fault injection.
 //! - **[`SimEvent`]** / **[`EventSink`]**: structured event tracing.
@@ -49,6 +51,7 @@
 
 pub mod clock;
 pub mod consumer;
+pub mod dsl;
 pub mod events;
 pub mod fault;
 pub mod generator;
@@ -60,6 +63,7 @@ pub mod ring;
 pub mod scenario;
 pub mod scheduler;
 pub mod storage;
+pub mod timeline;
 pub mod traffic;
 
 #[cfg(feature = "tui")]
@@ -70,15 +74,19 @@ pub use clock::{ClockMode, SimClock};
 pub use consumer::VirtualConsumer;
 pub use events::{EventSink, NullEventSink, SimEvent, SimEventKind, VecEventSink};
 pub use fault::{FaultInjector, FaultSpec};
-pub use generator::{PayloadGenerator, PayloadSpec, ProtocolMessage, build_udp_frame};
+pub use generator::{
+    CustomPayloadFn, PayloadGenerator, PayloadSpec, ProtocolMessage, build_udp_frame,
+};
 pub use metrics::SimMetricKey;
 pub use nic::{VirtualNic, VirtualNicConfig};
 pub use pcap::{
-    PcapConfig, PcapPacket, PcapSource, load_pcap, parse_pcap, write_pcap_bytes, write_pcap_bytes_ex,
+    PcapConfig, PcapPacket, PcapSource, load_pcap, parse_pcap, write_pcap_bytes,
+    write_pcap_bytes_ex,
 };
 pub use replay::SimReplay;
 pub use ring::{RingError, VirtualSharedMemory};
 pub use scenario::Scenario;
 pub use scheduler::{DynNic, EduControls, SimScheduler, SimStats};
 pub use storage::{VirtualStorageConfig, VirtualStorageSource};
+pub use timeline::TimelineAction;
 pub use traffic::{TrafficConfig, TrafficPacer, TrafficPattern};

@@ -18,7 +18,8 @@ preserving high performance, safety, and excellent documentation.
 |------|--------|
 | `flyby-core` traits / errors | Implemented (contract layer) |
 | Shared-memory SPSC sink | **Implemented** |
-| Network simulator | **Implemented** |
+| Network simulator (`flyby-net`) | **Implemented** |
+| Product simulator (`flyby-simulator`) | **Implemented** (CLI, TUI, FlyScenario DSL) |
 | File source + framing + replay engine | **Implemented** |
 | Facade builder `.run()` | Skeleton (config validation) |
 | `SimplePipeline` | **Implemented** (source→decode→place→sink) |
@@ -38,7 +39,9 @@ flyby/
 │   └── flyby-storage/    # File source + io_uring/SPDK stubs
 ├── examples/             # Runnable examples
 ├── benches/              # Criterion benchmarks
-├── simulator/            # Thin CLI marker (prefer flyby-net sim)
+├── simulator/            # First-class simulator (flyby-sim CLI + TUI + DSL)
+├── scenarios/            # FlyScenario tutorial files (*.fly.toml)
+├── articles/             # Medium reproduction catalog
 ├── docs/                 # Project guide (mdBook) + ADRs
 ├── .github/workflows/    # CI: fmt, clippy, test, doc, mdbook
 ├── Dockerfile            # Linux dev container
@@ -50,6 +53,10 @@ flyby/
 ```sh
 cargo build --workspace
 cargo run -p flyby-examples --bin hello_pipeline
+
+# Product simulator (no privileged networking required)
+cargo run -p flyby-simulator --bin flyby-sim -- tui constant_rate
+cargo run -p flyby-simulator --bin flyby-sim -- run scenarios/constant_rate.fly.toml
 ```
 
 ## Checks
@@ -88,6 +95,8 @@ VS Code / Codespaces users can open the repo in the configured
 ## Documentation
 
 - **Project guide:** `mdbook serve docs/ --open` (see [`docs/README.md`](docs/README.md))
+- **Simulator:** [`docs/src/simulator.md`](docs/src/simulator.md) ·
+  [FlyScenario DSL](docs/src/scenario-dsl.md)
 - **API reference:** `cargo doc --workspace --open`
 - **Architecture decisions:** [`docs/src/adr/`](docs/src/adr/)
 

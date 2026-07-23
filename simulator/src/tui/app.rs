@@ -11,6 +11,7 @@ use crossterm::terminal::{
 use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
 
+use crate::dsl::CompiledRun;
 use crate::events::{SimEvent, SimEventKind, VecEventSink};
 use crate::fault::FaultSpec;
 use crate::scenario::Scenario;
@@ -87,7 +88,7 @@ impl Default for DashState {
 }
 
 pub(super) struct Dashboard {
-    scenario: Scenario,
+    source: DashSource,
     sink: VecEventSink,
     sched: SimScheduler<VecEventSink>,
     mode: RunMode,
@@ -101,15 +102,50 @@ pub(super) struct Dashboard {
     finished: bool,
 }
 
+#[derive(Clone)]
+enum DashSource {
+    Builtin(Scenario),
+    Compiled(Box<CompiledRun>),
+}
+
+impl DashSource {
+    fn scenario(&self) -> &Scenario {
+        match self {
+            Self::Builtin(s) => s,
+            Self::Compiled(c) => &c.scenario,
+        }
+    }
+
+    fn build(&self, sink: VecEventSink) -> flyby_core::Result<SimScheduler<VecEventSink>> {
+        match self {
+            Self::Builtin(s) => build_scheduler_builtin(s.clone(), sink),
+            Self::Compiled(c) => {
+                let mut sched = c.build_scheduler_with_events(sink)?;
+                // TUI always starts paused.
+                sched.edu_mut().paused = true;
+                Ok(sched)
+            }
+        }
+    }
+}
+
 const HIST_CAP: usize = 64;
 const LOG_CAP: usize = 80;
 
 impl Dashboard {
     pub(super) fn new(scenario: Scenario) -> flyby_core::Result<Self> {
+        Self::from_source(DashSource::Builtin(scenario))
+    }
+
+    pub(super) fn new_compiled(compiled: CompiledRun) -> flyby_core::Result<Self> {
+        Self::from_source(DashSource::Compiled(Box::new(compiled)))
+    }
+
+    fn from_source(source: DashSource) -> flyby_core::Result<Self> {
         let sink = VecEventSink::new();
-        let sched = build_scheduler(scenario.clone(), sink.clone())?;
+        let sched = source.build(sink.clone())?;
         let mut dash = Self {
-            scenario,
+            source,
             sink,
             sched,
             mode: RunMode::Paused,
@@ -141,7 +177,7 @@ impl Dashboard {
         self.prev_packets = 0;
         self.finished = false;
         self.mode = RunMode::Paused;
-        self.sched = build_scheduler(self.scenario.clone(), self.sink.clone())?;
+        self.sched = self.source.build(self.sink.clone())?;
         self.sched.edu_mut().paused = true;
         self.sched.run()?;
         self.status = "Restarted — paused".into();
@@ -206,13 +242,15 @@ impl Dashboard {
         self.event_cursor = self.sink.len();
         let quiet = self.mode == RunMode::Auto && self.ticks_per_frame > 1;
         for ev in new_events {
-            if quiet && matches!(
-                ev.kind,
-                SimEventKind::PacketGenerated { .. }
-                    | SimEventKind::SlotWritten { .. }
-                    | SimEventKind::ConsumerRead { .. }
-                    | SimEventKind::TickCompleted { .. }
-            ) {
+            if quiet
+                && matches!(
+                    ev.kind,
+                    SimEventKind::PacketGenerated { .. }
+                        | SimEventKind::SlotWritten { .. }
+                        | SimEventKind::ConsumerRead { .. }
+                        | SimEventKind::TickCompleted { .. }
+                )
+            {
                 continue;
             }
             // Even at ×1 auto, skip per-packet noise — keep faults + lifecycle.
@@ -237,8 +275,8 @@ impl Dashboard {
 
     pub(super) fn snapshot(&self) -> DashState {
         DashState {
-            scenario_name: self.scenario.name.to_string(),
-            scenario_desc: self.scenario.description.to_string(),
+            scenario_name: self.source.scenario().name.clone(),
+            scenario_desc: self.source.scenario().description.clone(),
             clock_ns: self.sched.clock_ns().unwrap_or(0),
             duration_ns: self.sched.duration_ns(),
             stats: self.sched.stats().clone(),
@@ -325,7 +363,7 @@ fn format_event(ev: &SimEvent) -> String {
     }
 }
 
-fn build_scheduler(
+fn build_scheduler_builtin(
     scenario: Scenario,
     sink: VecEventSink,
 ) -> flyby_core::Result<SimScheduler<VecEventSink>> {
@@ -372,13 +410,21 @@ fn build_scheduler(
 
 /// Run the Ratatui dashboard for `scenario` until the user quits.
 pub fn run_dashboard(scenario: Scenario) -> flyby_core::Result<()> {
+    run_dashboard_inner(Dashboard::new(scenario)?)
+}
+
+/// Run the Ratatui dashboard for a compiled FlyScenario DSL document.
+pub fn run_dashboard_compiled(compiled: CompiledRun) -> flyby_core::Result<()> {
+    run_dashboard_inner(Dashboard::new_compiled(compiled)?)
+}
+
+fn run_dashboard_inner(mut dash: Dashboard) -> flyby_core::Result<()> {
     enable_raw_mode().map_err(io_err)?;
     let mut stdout = stdout();
     execute!(stdout, EnterAlternateScreen).map_err(io_err)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend).map_err(io_err)?;
 
-    let mut dash = Dashboard::new(scenario)?;
     let tick_rate = Duration::from_millis(50);
     let mut last_tick = Instant::now();
 
@@ -425,7 +471,7 @@ mod tests {
     #[test]
     fn build_scheduler_arms_paused() {
         let sink = VecEventSink::new();
-        let mut sched = build_scheduler(Scenario::constant_rate(), sink).unwrap();
+        let mut sched = build_scheduler_builtin(Scenario::constant_rate(), sink).unwrap();
         sched.edu_mut().paused = true;
         let stats = sched.run().unwrap();
         assert_eq!(stats.ticks, 0);
@@ -436,7 +482,10 @@ mod tests {
     fn format_event_includes_drop() {
         let line = format_event(&SimEvent {
             clock_ns: 1_000_000,
-            kind: SimEventKind::PacketDropped { nic: "nic0", seq: 7 },
+            kind: SimEventKind::PacketDropped {
+                nic: "nic0",
+                seq: 7,
+            },
         });
         assert!(line.contains("DROP"));
         assert!(line.contains("nic0"));

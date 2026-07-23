@@ -1,10 +1,12 @@
-//! `flyby-sim` CLI: run named scenarios, replay pcap, or open the TUI dashboard.
+//! `flyby-sim` CLI: run named scenarios, FlyScenario DSL files, replay pcap,
+//! or open the TUI dashboard.
 //!
 //! Usage:
 //!
 //! ```text
 //! flyby-sim [scenario]
-//! flyby-sim tui [scenario]
+//! flyby-sim run <file.fly.toml>
+//! flyby-sim tui [scenario|file.fly.toml]
 //! flyby-sim pcap <path> [--full-speed]
 //! ```
 //!
@@ -13,6 +15,7 @@
 //! Medium article demos live under `articles/` —
 //! `./scripts/reproduce-article.sh <slug>`.
 
+use flyby_simulator::dsl::{self, CompiledRun};
 use flyby_simulator::{
     FaultSpec, PcapConfig, PcapSource, Scenario, SimScheduler, TrafficConfig, VirtualConsumer,
     VirtualNic, VirtualNicConfig, VirtualSharedMemory, events::NullEventSink,
@@ -34,37 +37,110 @@ fn main() {
         return;
     }
 
-    let scenario_name = args
+    if args.first().map(String::as_str) == Some("run") {
+        args.remove(0);
+        let path = args.first().cloned().unwrap_or_else(|| {
+            eprintln!("Usage: flyby-sim run <scenario.fly.toml>");
+            std::process::exit(1);
+        });
+        run_dsl_file(&path);
+        return;
+    }
+
+    let scenario_arg = args
         .first()
         .cloned()
         .unwrap_or_else(|| "constant_rate".to_string());
-    let scenario = resolve_scenario(&scenario_name);
-    run_headless(scenario);
+
+    if dsl::looks_like_scenario_file(&scenario_arg) {
+        run_dsl_file(&scenario_arg);
+        return;
+    }
+
+    let scenario = resolve_builtin(&scenario_arg);
+    run_headless_builtin(scenario);
 }
 
-fn resolve_scenario(name: &str) -> Scenario {
+fn resolve_builtin(name: &str) -> Scenario {
     Scenario::by_name(name).unwrap_or_else(|| {
         eprintln!(
             "Unknown scenario '{}'. Available: {}",
             name,
             Scenario::builtin_names().join(", ")
         );
-        eprintln!("Or: flyby-sim tui [scenario]");
+        eprintln!("Or: flyby-sim run <file.fly.toml>");
+        eprintln!("Or: flyby-sim tui [scenario|file.fly.toml]");
         eprintln!("Or: flyby-sim pcap <path> [--full-speed]");
         eprintln!("Medium articles: ./scripts/reproduce-article.sh --list");
         std::process::exit(1);
     })
 }
 
+fn run_dsl_file(path: &str) {
+    let compiled = match dsl::compile_path(path) {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("Failed to load scenario '{path}': {e}");
+            std::process::exit(1);
+        }
+    };
+    run_compiled(compiled);
+}
+
+fn run_compiled(compiled: CompiledRun) {
+    println!(
+        "Running scenario '{}': {}",
+        compiled.scenario.name, compiled.scenario.description
+    );
+    println!("  Duration : {:?}", compiled.scenario.duration);
+    println!("  Tick     : {} µs", compiled.scenario.tick_ns / 1_000);
+    println!("  NICs     : {}", compiled.nics.len());
+    println!("  Pcaps    : {}", compiled.pcaps.len());
+    println!("  Timeline : {} actions", compiled.timeline.len());
+    if compiled.storage_declared > 0 {
+        println!(
+            "  Storage  : {} declared (not wired into scheduler yet)",
+            compiled.storage_declared
+        );
+    }
+    println!("  Note     : results are SIMULATED (not hardware)");
+    assert!(
+        compiled.simulated,
+        "FlyScenario runs must always be marked simulated"
+    );
+
+    let mut sched = match compiled.build_scheduler() {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("Failed to build scheduler: {e}");
+            std::process::exit(1);
+        }
+    };
+    print_stats(sched.run());
+}
+
 fn run_tui(args: &[String]) {
     #[cfg(feature = "tui")]
     {
-        let scenario_name = args
+        let arg = args
             .first()
             .cloned()
             .unwrap_or_else(|| "constant_rate".to_string());
-        let scenario = resolve_scenario(&scenario_name);
-        if let Err(e) = flyby_simulator::tui::run_dashboard(scenario) {
+
+        let result = if dsl::looks_like_scenario_file(&arg) {
+            match dsl::compile_path(&arg) {
+                Ok(c) => flyby_simulator::tui::run_dashboard_compiled(c),
+                Err(e) => {
+                    eprintln!("Failed to load scenario '{arg}': {e}");
+                    std::process::exit(1);
+                }
+            }
+        } else {
+            let scenario = resolve_builtin(&arg);
+            flyby_simulator::tui::run_dashboard(scenario)
+        };
+
+        if let Err(e) = result {
             eprintln!("TUI error: {e}");
             std::process::exit(1);
         }
@@ -77,7 +153,7 @@ fn run_tui(args: &[String]) {
     }
 }
 
-fn run_headless(scenario: Scenario) {
+fn run_headless_builtin(scenario: Scenario) {
     println!(
         "Running scenario '{}': {}",
         scenario.name, scenario.description
@@ -116,7 +192,7 @@ fn run_headless(scenario: Scenario) {
         NullEventSink,
     );
 
-    let scenario_label = scenario.name;
+    let scenario_label = scenario.name.clone();
     let is_slow = scenario_label == "slow_consumer";
     let is_overflow = scenario_label == "queue_overflow";
     let ring_slots = if is_overflow { 16 } else { 4096 };
@@ -187,8 +263,8 @@ fn run_pcap(args: &[String]) {
         std::time::Duration::from_nanos(last_ts.saturating_add(1_000_000).max(1_000_000));
 
     let scenario = Scenario {
-        name: "pcap_replay",
-        description: "Classic pcap replay",
+        name: "pcap_replay".into(),
+        description: "Classic pcap replay".into(),
         duration,
         tick_ns: 100_000,
         ..Scenario::default()

@@ -51,4 +51,8 @@ Results are always labelled **simulated**.
 | `part-vi-protocol-quotes` | `protocol_quotes` |
 | `part-vi-pcap-replay` | `simulator/fixtures/udp_quotes.pcap` |
 
-See also [Simulator](./simulator.md).
+See also [Simulator](./simulator.md) and [FlyScenario DSL](./scenario-dsl.md).
+
+DSL files can also be used as article workloads once the catalog supports
+a `dsl` / path entry; today seed articles use built-in scenario names or
+pcap paths.
