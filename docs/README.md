@@ -24,6 +24,7 @@ docs/
 │   ├── adr/           # Architecture Decision Records
 │   ├── simulator.md   # product simulator overview + TUI
 │   ├── scenario-dsl.md # FlyScenario TOML + Rhai reference
+│   ├── runtime.md     # Part VII runtime / scheduling / placement
 │   ├── articles.md    # Medium reproduce-with-one-command
 │   └── benchmarks.md
 └── README.md          # this file

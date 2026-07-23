@@ -29,6 +29,12 @@
 //!
 //! Portable APIs (`flyby-net` simulator, `flyby-storage` file source) always
 //! compile as dependencies of this facade. Heavy stubs are feature-gated.
+//!
+//! ## Runtime (Part VII)
+//!
+//! See [`runtime`] for scheduling, back-pressure, configuration, and the
+//! lifecycle driver. ADRs: batch-oriented runtime (009), runtime independent
+//! of backends (010).
 
 #![deny(missing_docs)]
 #![deny(rustdoc::broken_intra_doc_links)]
@@ -44,18 +50,24 @@ pub mod api {
     };
 }
 
+pub mod builder;
+pub mod pipeline;
+pub mod runtime;
+
 /// The public prelude.
 pub mod prelude {
     pub use crate::api::*;
     pub use crate::builder::{FlyBy, FlyByBuilder};
     pub use crate::pipeline::{
-        DropAllPlacement, FixedPlacement, IdentityPreProcessor, NetworkBatchSource, RawBatchSource,
-        SimplePipeline, StorageBatchSource,
+        CallbackPlacement, DropAllPlacement, FixedPlacement, HashPlacement, IdentityPreProcessor,
+        NetworkBatchSource, RawBatchSource, RoundRobinPlacement, SimplePipeline,
+        StorageBatchSource, schema_hash_placement,
+    };
+    pub use crate::runtime::{
+        BackpressureStrategy, Runtime, RuntimeConfig, RuntimePhase, SchedulerKind,
+        SingleThreadScheduler, WorkerPoolScheduler,
     };
 }
-
-pub mod builder;
-pub mod pipeline;
 
 // --- Backend re-exports ----------------------------------------------------
 

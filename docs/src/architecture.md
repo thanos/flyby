@@ -42,7 +42,9 @@ flyby/
 └── simulator/            # First-class simulator (flyby-sim CLI)
 ```
 
-The `flyby` crate re-exports the public API. Users should normally write:
+The `flyby` crate re-exports the public API and hosts the Part VII
+**runtime** (`flyby::runtime`): scheduling, back-pressure, and lifecycle
+around [`Pipeline`](./concepts/pipeline.md). Users should normally write:
 
 ```rust
 use flyby::prelude::*;

@@ -309,6 +309,8 @@ dependencies = [
  "flyby-memory",
  "flyby-net",
  "flyby-storage",
+ "serde",
+ "toml",
 ]
 
 [[package]]

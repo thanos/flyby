@@ -16,7 +16,9 @@ message to a [`SinkId`]. Returning [`SinkId::NONE`] drops the message.
 
 ## Where it fits
 
-Between [`PreProcessor`] and [`Sink`].
+Between [`PreProcessor`] and [`Sink`]. Concrete helpers live in
+`flyby::pipeline`: `FixedPlacement`, `RoundRobinPlacement`, `HashPlacement`,
+`CallbackPlacement`, `schema_hash_placement`.
 
 ## When not to use it
 
