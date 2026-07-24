@@ -43,11 +43,11 @@ fn split_num_unit(s: &str) -> Result<(&str, &str)> {
     if i < bytes.len() && (bytes[i] == b'+' || bytes[i] == b'-') {
         i += 1;
     }
-    let start = i;
+    let start = 0; // keep optional leading sign in the numeric token
     while i < bytes.len() && (bytes[i].is_ascii_digit() || bytes[i] == b'_' || bytes[i] == b'.') {
         i += 1;
     }
-    if i == start {
+    if i == start || (i == 1 && (bytes[0] == b'+' || bytes[0] == b'-')) {
         return Err(Error::config(format!("duration missing number: '{s}'")));
     }
     let num = &s[start..i];
@@ -66,5 +66,28 @@ mod tests {
         assert_eq!(parse_duration_ns("500us").unwrap(), 500_000);
         assert_eq!(parse_duration_ns("250ns").unwrap(), 250);
         assert_eq!(parse_duration_ns("1.5ms").unwrap(), 1_500_000);
+    }
+
+    #[test]
+    fn parses_aliases_underscores_and_bare_ns() {
+        assert_eq!(parse_duration_ns(" 2_000 ").unwrap(), 2_000);
+        assert_eq!(parse_duration_ns("1sec").unwrap(), 1_000_000_000);
+        assert_eq!(parse_duration_ns("2secs").unwrap(), 2_000_000_000);
+        assert_eq!(parse_duration_ns("3msec").unwrap(), 3_000_000);
+        assert_eq!(parse_duration_ns("4usec").unwrap(), 4_000);
+        assert_eq!(parse_duration_ns("1.5s").unwrap(), 1_500_000_000);
+        assert_eq!(parse_duration_ns("+10ms").unwrap(), 10_000_000);
+        assert_eq!(parse_duration_ns("1µs").unwrap(), 1_000);
+    }
+
+    #[test]
+    fn rejects_invalid_durations() {
+        assert!(parse_duration_ns("").is_err());
+        assert!(parse_duration_ns("   ").is_err());
+        assert!(parse_duration_ns("ms").is_err());
+        assert!(parse_duration_ns("1x").is_err());
+        assert!(parse_duration_ns("-1ms").is_err());
+        assert!(parse_duration_ns("nanms").is_err());
+        assert!(parse_duration_ns("1.2.3ms").is_err());
     }
 }

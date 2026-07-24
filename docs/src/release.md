@@ -56,6 +56,8 @@ CI generates LCOV with `cargo llvm-cov` and uploads to
 can use `GITHUB_TOKEN`; enable the GitHub app / repo on Coveralls for a
 live badge).
 
+Local install and commands: [Testing → Coverage](./testing.md#coverage).
+
 ## Pre-release gates (summary)
 
 ```text

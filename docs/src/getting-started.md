@@ -62,6 +62,8 @@ cargo test --workspace
 cargo doc --workspace --no-deps
 ```
 
+Coverage (`cargo llvm-cov`): see [Testing → Coverage](./testing.md#coverage).
+
 Runtime (scheduling / back-pressure) docs: [Runtime](./runtime.md).
 
 ## Feature flags

@@ -298,3 +298,104 @@ impl Default for DpdkConfig {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn xdp_mode_and_defaults() {
+        assert!(!XdpMode::Copy.may_zero_copy());
+        assert!(XdpMode::ZeroCopy.may_zero_copy());
+        assert!(XdpMode::Auto.may_zero_copy());
+        assert_eq!(XdpConfig::default().program, "redirect");
+        assert_eq!(UmemConfig::default().frame_size, 2048);
+        assert_eq!(AfXdpConfig::default().interface, "eth0");
+        assert_eq!(SimNetConfig::default().udp_dst_port, 9000);
+    }
+
+    #[test]
+    fn validates_umem_and_af_xdp() {
+        UmemConfig::default().validate().unwrap();
+        assert!(
+            UmemConfig {
+                frame_size: 3,
+                frame_count: 4
+            }
+            .validate()
+            .is_err()
+        );
+        assert!(
+            UmemConfig {
+                frame_size: 2048,
+                frame_count: 0
+            }
+            .validate()
+            .is_err()
+        );
+
+        AfXdpConfig::default().validate().unwrap();
+        assert!(
+            AfXdpConfig {
+                interface: String::new(),
+                ..AfXdpConfig::default()
+            }
+            .validate()
+            .is_err()
+        );
+        assert!(
+            AfXdpConfig {
+                poll_budget: 0,
+                ..AfXdpConfig::default()
+            }
+            .validate()
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn validates_sim_and_dpdk() {
+        SimNetConfig::default().validate().unwrap();
+        assert!(
+            SimNetConfig {
+                batch_size: 0,
+                ..SimNetConfig::default()
+            }
+            .validate()
+            .is_err()
+        );
+        assert!(
+            SimNetConfig {
+                idle_rate: 1.0,
+                ..SimNetConfig::default()
+            }
+            .validate()
+            .is_err()
+        );
+        assert!(
+            SimNetConfig {
+                drop_rate: -0.1,
+                ..SimNetConfig::default()
+            }
+            .validate()
+            .is_err()
+        );
+
+        assert!(DpdkConfig::default().validate().is_err());
+        DpdkConfig {
+            pci_addr: "0000:00:00.0".into(),
+            ..DpdkConfig::default()
+        }
+        .validate()
+        .unwrap();
+        assert!(
+            DpdkConfig {
+                pci_addr: "x".into(),
+                burst_size: 0,
+                ..DpdkConfig::default()
+            }
+            .validate()
+            .is_err()
+        );
+    }
+}

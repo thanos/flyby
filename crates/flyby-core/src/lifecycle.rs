@@ -58,3 +58,22 @@ pub trait Lifecycle: Send + Sync {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct DefaultsOnly;
+
+    impl Lifecycle for DefaultsOnly {}
+
+    #[test]
+    fn default_hooks_are_noops() {
+        let mut stage = DefaultsOnly;
+        stage.init().unwrap();
+        stage.run().unwrap();
+        stage.shutdown().unwrap();
+        // Idempotent shutdown.
+        stage.shutdown().unwrap();
+    }
+}

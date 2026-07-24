@@ -44,6 +44,40 @@ cargo test --workspace
 cargo test --workspace --all-features
 ```
 
+## Coverage
+
+CI generates LCOV with [`cargo-llvm-cov`](https://github.com/taiki-e/cargo-llvm-cov)
+and uploads it to Coveralls (see
+[`.github/workflows/ci.yml`](../../.github/workflows/ci.yml)).
+
+Install once:
+
+```sh
+rustup component add llvm-tools-preview
+cargo install cargo-llvm-cov --locked
+```
+
+Match CI (writes `lcov.info`):
+
+```sh
+cargo llvm-cov --workspace --all-features --lcov \
+  --output-path lcov.info \
+  --ignore-filename-regex '(examples/|benches/|simulator/src/main\.rs)'
+```
+
+Useful local variants:
+
+```sh
+# Terminal summary
+cargo llvm-cov --workspace --all-features
+
+# HTML report (opens target/llvm-cov/html/index.html)
+cargo llvm-cov --workspace --all-features --html --open
+```
+
+Coveralls upload only runs in GitHub Actions. Locally, inspect the
+terminal summary, HTML report, or `lcov.info`.
+
 ## Linux / privileged
 
 Feature stubs must keep compiling under `--all-features`. Privileged

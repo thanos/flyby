@@ -74,3 +74,30 @@ impl MetricKey for NetMetricKey {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn kinds_and_names_cover_schema() {
+        let all = [
+            NetMetricKey::PacketsReceived,
+            NetMetricKey::PacketsDropped,
+            NetMetricKey::BytesReceived,
+            NetMetricKey::BatchesPolled,
+            NetMetricKey::BatchSize,
+            NetMetricKey::RxRingOccupancy,
+            NetMetricKey::FillRingStarvation,
+            NetMetricKey::ParseFailures,
+            NetMetricKey::SinkWriteFailures,
+        ];
+        for key in all {
+            assert!(!key.name().is_empty());
+            assert!(key.name().starts_with("net."));
+        }
+        assert_eq!(NetMetricKey::BatchSize.kind(), MetricKind::Histogram);
+        assert_eq!(NetMetricKey::RxRingOccupancy.kind(), MetricKind::Gauge);
+        assert_eq!(NetMetricKey::PacketsReceived.kind(), MetricKind::Counter);
+    }
+}

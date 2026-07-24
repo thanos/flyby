@@ -255,4 +255,46 @@ mod tests {
         let err = Error::not_implemented("stub");
         assert_eq!(err.kind(), ErrorKind::NotImplemented);
     }
+
+    #[test]
+    fn all_constructors_and_labels() {
+        let cases = [
+            (Error::sink("s"), ErrorKind::Sink, "sink"),
+            (
+                Error::back_pressure("b"),
+                ErrorKind::BackPressure,
+                "back-pressure",
+            ),
+            (Error::decode("d"), ErrorKind::Decode, "decode"),
+            (Error::encode("e"), ErrorKind::Encode, "encode"),
+            (Error::placement("p"), ErrorKind::Placement, "placement"),
+            (Error::preprocess("pp"), ErrorKind::PreProcess, "preprocess"),
+            (Error::config("c"), ErrorKind::Config, "config"),
+            (
+                Error::feature_not_enabled("f"),
+                ErrorKind::FeatureNotEnabled,
+                "feature-not-enabled",
+            ),
+            (Error::lifecycle("l"), ErrorKind::Lifecycle, "lifecycle"),
+            (Error::io("i"), ErrorKind::Io, "io"),
+            (Error::other("o"), ErrorKind::Other, "other"),
+        ];
+        for (err, kind, label) in cases {
+            assert_eq!(err.kind(), kind);
+            assert!(err.message().chars().next().is_some());
+            assert!(err.to_string().starts_with(label));
+            let cloned = err.clone();
+            assert_eq!(cloned, err);
+        }
+
+        let interrupted: Error = io::Error::new(io::ErrorKind::Interrupted, "intr").into();
+        assert_eq!(interrupted.kind(), ErrorKind::BackPressure);
+    }
+
+    #[test]
+    fn with_source_preserves_chain() {
+        let err = Error::with_source(ErrorKind::Other, "wrap", io::Error::other("inner"));
+        assert!(std::error::Error::source(&err).is_some());
+        assert!(err.clone().message() == "wrap");
+    }
 }

@@ -209,3 +209,128 @@ pub fn record_step(
     metrics.record_histogram(&RuntimeMetricKey::StepDurationNs, duration_ns as f64);
     emit_lifecycle(metrics, true, &RuntimeEvent::Step { n: steps });
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::api::{
+        CountingCollector, DefaultSchemaId, Error, Lifecycle, Message, Metadata, Pipeline, Result,
+        Sink, SinkId, StepOutcome, Timestamp,
+    };
+    use std::sync::Arc;
+
+    #[derive(Clone)]
+    struct Tick(u64);
+    impl Message for Tick {
+        type Schema = DefaultSchemaId;
+        fn schema_id(&self) -> Self::Schema {
+            DefaultSchemaId(1)
+        }
+        fn timestamp(&self) -> Timestamp {
+            Timestamp::from_nanos(self.0)
+        }
+        fn metadata(&self) -> Metadata {
+            Metadata::default()
+        }
+    }
+
+    struct ScriptedPipe {
+        outcomes: Vec<StepOutcome>,
+        idx: usize,
+    }
+
+    impl Lifecycle for ScriptedPipe {}
+    impl Pipeline for ScriptedPipe {
+        type Message = Tick;
+        fn step(&mut self) -> Result<bool> {
+            Ok(matches!(self.step_outcome()?, StepOutcome::Progress))
+        }
+        fn step_outcome(&mut self) -> Result<StepOutcome> {
+            if self.idx >= self.outcomes.len() {
+                return Ok(StepOutcome::Exhausted);
+            }
+            let o = self.outcomes[self.idx];
+            self.idx += 1;
+            Ok(o)
+        }
+        fn register_sink(
+            &mut self,
+            _id: SinkId,
+            _sink: Box<dyn Sink<Message = Self::Message>>,
+        ) -> Result<()> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn run_single_thread_handles_idle_bp_and_shutdown() {
+        let flag = shutdown_flag();
+        let mut pipe = ScriptedPipe {
+            outcomes: vec![
+                StepOutcome::Idle,
+                StepOutcome::BackPressured,
+                StepOutcome::Progress,
+                StepOutcome::Exhausted,
+            ],
+            idx: 0,
+        };
+        let cfg = RuntimeConfig {
+            idle_sleep_ms: Some(0),
+            backpressure_yield_ms: 0,
+            ..RuntimeConfig::default()
+        };
+        run_single_thread(&mut pipe, &cfg, &flag).unwrap();
+
+        let mut pipe = ScriptedPipe {
+            outcomes: vec![StepOutcome::BackPressured; 3],
+            idx: 0,
+        };
+        let cfg = RuntimeConfig {
+            backpressure_yield_ms: 1,
+            idle_sleep_ms: Some(1),
+            ..RuntimeConfig::default()
+        };
+        // Interrupt after starting: seed one idle then shutdown mid-loop via flag.
+        let flag = shutdown_flag();
+        flag.store(true, Ordering::SeqCst);
+        run_single_thread(&mut pipe, &cfg, &flag).unwrap();
+    }
+
+    #[test]
+    fn single_thread_scheduler_trait_and_handles() {
+        let shared = shutdown_flag();
+        let mut sched =
+            SingleThreadScheduler::with_shutdown(RuntimeConfig::default(), Arc::clone(&shared));
+        assert!(!sched.is_shutdown_requested());
+        assert!(!sched.shutdown_handle().load(Ordering::SeqCst));
+        let mut pipe = ScriptedPipe {
+            outcomes: vec![StepOutcome::Progress, StepOutcome::Exhausted],
+            idx: 0,
+        };
+        sched.run(&mut pipe).unwrap();
+        sched.request_shutdown();
+        assert!(sched.is_shutdown_requested());
+        assert!(shared.load(Ordering::SeqCst));
+    }
+
+    #[test]
+    fn worker_pool_propagates_factory_error() {
+        let cfg = RuntimeConfig::default().with_workers(1);
+        let pool = WorkerPoolScheduler::new(cfg).unwrap();
+        let err = pool
+            .run_factory(|_| -> Result<ScriptedPipe> { Err(Error::lifecycle("factory boom")) })
+            .unwrap_err();
+        assert!(err.to_string().contains("factory boom") || err.to_string().contains("worker"));
+        pool.request_shutdown();
+        assert!(pool.shutdown_handle().load(Ordering::SeqCst));
+    }
+
+    #[test]
+    fn record_step_respects_enabled_flag() {
+        let metrics = CountingCollector::new();
+        record_step(&metrics, false, 1, 10);
+        assert_eq!(metrics.calls.load(std::sync::atomic::Ordering::Relaxed), 0);
+        record_step(&metrics, true, 2, 20);
+        assert!(metrics.calls.load(std::sync::atomic::Ordering::Relaxed) >= 2);
+    }
+}

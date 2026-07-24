@@ -87,3 +87,128 @@ fn looks_like_scenario_file() {
     assert!(dsl::looks_like_scenario_file("x.toml"));
     assert!(!dsl::looks_like_scenario_file("constant_rate"));
 }
+
+#[test]
+fn rhai_nic_and_consumer_proxies() {
+    let actions = dsl::eval_script(
+        r#"
+        at(ms(10));
+        let n = nic("nic0");
+        n.drop_rate = 0.25;
+        n.set_fixed(5_000);
+        n.set_burst(16, ms(2));
+        let c = consumer("c0");
+        c.max_per_drain = 4;
+        c.set_unlimited();
+        schedule_fixed(ms(50), "nic1", 1000);
+        schedule_slow_consumer(ms(60), "c1", 2);
+        "#,
+    )
+    .unwrap();
+    assert!(actions.len() >= 6);
+    assert!(
+        actions
+            .iter()
+            .any(|a| matches!(a, TimelineAction::SetTraffic { .. }))
+    );
+    assert!(
+        actions
+            .iter()
+            .any(|a| matches!(a, TimelineAction::SlowConsumer { .. }))
+    );
+}
+
+#[test]
+fn rhai_requires_at_before_mutation() {
+    let err = dsl::eval_script(
+        r#"
+        let n = nic("nic0");
+        n.drop_rate = 0.1;
+        "#,
+    )
+    .unwrap_err();
+    assert!(err.to_string().contains("at(") || err.to_string().contains("Rhai"));
+}
+
+#[test]
+fn compile_rejects_bad_patterns_and_empty_script() {
+    let err = compile_str(
+        r#"
+        [scenario]
+        name = "bad_pat"
+        [[nic]]
+        name = "nic0"
+        [nic.traffic]
+        pattern = "not_a_real_pattern"
+        "#,
+        ".",
+    )
+    .unwrap_err();
+    assert!(err.to_string().contains("pattern") || err.to_string().contains("unknown"));
+
+    let err = compile_str(
+        r#"
+        [scenario]
+        name = "bad_engine"
+        [[nic]]
+        name = "nic0"
+        [script]
+        engine = "lua"
+        source = "print(1)"
+        "#,
+        ".",
+    )
+    .unwrap_err();
+    assert!(err.to_string().contains("engine") || err.to_string().contains("rhai"));
+
+    let err = compile_str(
+        r#"
+        [scenario]
+        name = "empty_script"
+        [[nic]]
+        name = "nic0"
+        [script]
+        source = ""
+        "#,
+        ".",
+    )
+    .unwrap_err();
+    assert!(err.to_string().contains("script") || err.to_string().contains("source"));
+}
+
+#[test]
+fn compile_inline_timeline_and_edu() {
+    let run = compile_str(
+        r#"
+        [scenario]
+        name = "edu_timeline"
+        duration = "100ms"
+        tick = "10ms"
+        [[nic]]
+        name = "nic0"
+        [nic.traffic]
+        pattern = "fixed"
+        pps = 1000
+        [[consumer]]
+        name = "c0"
+        [[timeline]]
+        at = "20ms"
+        action = "set_fault"
+        nic = "nic0"
+        drop_rate = 0.5
+        [[timeline]]
+        at = "40ms"
+        action = "slow_consumer"
+        consumer = "c0"
+        max_per_drain = 1
+        [edu]
+        breakpoint_tick = 5
+        "#,
+        ".",
+    )
+    .unwrap();
+    assert_eq!(run.timeline.len(), 2);
+    let mut sched = run.build_scheduler().unwrap();
+    let stats = sched.run().unwrap();
+    assert!(stats.ticks <= 5);
+}

@@ -123,4 +123,49 @@ mod tests {
         assert!(text.contains("constant_rate") || text.contains("FlyBy"));
         assert!(text.contains("SIMULATED") || text.contains("PAUSED") || text.contains("clock"));
     }
+
+    #[test]
+    fn render_steps_until_finished() {
+        let text = render_text_frame(
+            Scenario {
+                duration: Duration::from_millis(3),
+                tick_ns: 1_000_000,
+                ..Scenario::constant_rate()
+            },
+            64,
+            80,
+            24,
+        )
+        .unwrap();
+        assert!(!text.is_empty());
+    }
+
+    #[test]
+    fn clean_backend_text_strips_quotes() {
+        let cleaned = clean_backend_text("\"hello\"\n  \"world\"  \n");
+        assert!(cleaned.contains("hello"));
+        assert!(cleaned.contains("world"));
+        assert!(!cleaned.contains('"'));
+    }
+
+    #[test]
+    fn text_frame_to_svg_colors_and_escapes() {
+        let frame = "PAUSED SIMULATED\nDROP overflow\nAUTO DONE\nplain & <tag>\nOVERFLOW ring";
+        let svg = text_frame_to_svg(frame, "FlyBy shot");
+        assert!(svg.contains("<svg"));
+        assert!(svg.contains("FlyBy shot"));
+        assert!(svg.contains("#ffa657")); // paused/simulated
+        assert!(svg.contains("#ff7b72")); // drop/overflow
+        assert!(svg.contains("#3fb950")); // auto/done
+        assert!(svg.contains("&amp;"));
+        assert!(svg.contains("&lt;"));
+        assert!(svg.contains("</svg>"));
+    }
+
+    #[test]
+    fn xml_escape_control_chars() {
+        assert_eq!(xml_escape("a\u{0001}b"), "a b");
+        assert_eq!(xml_escape("\"x\""), "&quot;x&quot;");
+        assert_eq!(xml_escape("a>b"), "a&gt;b");
+    }
 }

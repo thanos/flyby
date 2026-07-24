@@ -450,7 +450,9 @@ fn _read_all(r: &mut dyn Read) -> Result<Vec<u8>> {
 mod tests {
     use super::*;
     use crate::events::{NullEventSink, VecEventSink};
+    use crate::fault::FaultSpec;
     use flyby_core::Lifecycle;
+    use flyby_net::NetworkSource;
     use std::io::{Cursor, Write};
     use tempfile::NamedTempFile;
 
@@ -541,5 +543,161 @@ mod tests {
     fn cursor_helper_reads() {
         let mut c = Cursor::new(vec![1u8, 2, 3]);
         assert_eq!(_read_all(&mut c).unwrap(), vec![1, 2, 3]);
+    }
+
+    #[test]
+    fn rejects_short_and_truncated() {
+        assert!(parse_pcap(&[0u8; 8]).is_err());
+        // Valid header + truncated packet record.
+        let mut bytes = write_pcap_bytes(&[(0, &[0u8; 64])]);
+        bytes.truncate(24 + 16 + 10); // header + pkt hdr + partial body
+        assert!(parse_pcap(&bytes).is_err());
+    }
+
+    #[test]
+    fn nanosecond_and_byte_swapped_magic() {
+        let ns = write_pcap_bytes_ex(&[(1_500_000_000, &[9u8; 16])], true);
+        let pkts = parse_pcap(&ns).unwrap();
+        assert_eq!(pkts.len(), 1);
+        assert_eq!(pkts[0].timestamp_ns, 1_500_000_000);
+
+        // Byte-swap a microsecond LE capture into BE magic + fields.
+        let le = write_pcap_bytes(&[(2_000_000, &[7u8; 8])]);
+        let mut be = le.clone();
+        // Swap magic to big-endian us form.
+        be[0..4].copy_from_slice(&0xd4c3_b2a1u32.to_le_bytes());
+        // Swap multi-byte fields in global header and packet header.
+        for off in [4usize, 6] {
+            be[off..off + 2].reverse();
+        }
+        for off in [8usize, 12, 16, 20, 24, 28, 32, 36] {
+            be[off..off + 4].reverse();
+        }
+        let pkts = parse_pcap(&be).unwrap();
+        assert_eq!(pkts.len(), 1);
+        assert_eq!(pkts[0].data, vec![7u8; 8]);
+    }
+
+    #[test]
+    fn loop_capture_and_fault_injection() {
+        let pkts = parse_pcap(&sample_capture()).unwrap();
+        // Drop everything without looping (loop+100% drop would spin forever).
+        let mut src = PcapSource::new(
+            pkts.clone(),
+            PcapConfig {
+                replay: ReplayMode::FullSpeed,
+                loop_capture: false,
+                fault: FaultSpec {
+                    drop_rate: 1.0,
+                    ..FaultSpec::default()
+                },
+                fault_seed: 1,
+                ..PcapConfig::default()
+            },
+            VecEventSink::new(),
+        )
+        .unwrap();
+        src.init().unwrap();
+        src.set_tick_context(1_000_000, 0);
+        let mut batch = RawBatch::new(8, 128);
+        let n = src.poll_batch(&mut batch).unwrap();
+        assert_eq!(n, 0);
+        assert!(src.packets_dropped >= 3);
+        assert!(!src.is_empty());
+        assert_eq!(src.len(), 3);
+        assert_eq!(src.name(), "pcap0");
+        assert_eq!(src.backend_name(), "pcap");
+
+        // Looping capture re-arms after exhaustion.
+        let mut looped = PcapSource::new(
+            pkts,
+            PcapConfig {
+                replay: ReplayMode::FullSpeed,
+                loop_capture: true,
+                ..PcapConfig::default()
+            },
+            NullEventSink,
+        )
+        .unwrap();
+        looped.init().unwrap();
+        looped.set_tick_context(1_000_000, 0);
+        // Capacity larger than capture length so one poll wraps under loop_capture.
+        let mut batch = RawBatch::new(8, 128);
+        let n = looped.poll_batch(&mut batch).unwrap();
+        assert!(n >= 3, "expected looped delivery, got {n}");
+        assert!(!looped.exhausted);
+    }
+
+    #[test]
+    fn pause_resume_advance_and_hot_swap() {
+        let pkts = parse_pcap(&sample_capture()).unwrap();
+        let mut src = PcapSource::new(
+            pkts,
+            PcapConfig {
+                replay: ReplayMode::SingleStep,
+                ..PcapConfig::default()
+            },
+            NullEventSink,
+        )
+        .unwrap();
+        src.init().unwrap();
+        src.pause_replay();
+        src.set_tick_context(1_000_000, 0);
+        let mut batch = RawBatch::new(4, 128);
+        assert_eq!(src.poll_batch(&mut batch).unwrap(), 0);
+        src.resume_replay();
+        src.advance_replay();
+        assert_eq!(src.poll_batch(&mut batch).unwrap(), 1);
+
+        src.set_fault(FaultSpec {
+            corrupt_rate: 1.0,
+            latency_spike_rate: 1.0,
+            latency_spike_ns: 100,
+            ..FaultSpec::default()
+        });
+        src.set_traffic(crate::traffic::TrafficConfig::default());
+        src.advance_replay();
+        batch.reset(128);
+        let _ = src.poll_batch(&mut batch).unwrap();
+        // Fault policy is applied on the next armed step; either spike or corrupt may fire.
+        let spiked = src.take_spike_ns();
+        assert!(spiked > 0 || src.packets_corrupted > 0 || src.packets_generated > 0);
+
+        src.shutdown().unwrap();
+        assert!(src.poll_batch(&mut batch).is_err());
+    }
+
+    #[test]
+    fn empty_capture_and_from_path() {
+        let mut src = PcapSource::new(
+            Vec::new(),
+            PcapConfig {
+                replay: ReplayMode::FullSpeed,
+                ..PcapConfig::default()
+            },
+            NullEventSink,
+        )
+        .unwrap();
+        assert!(src.is_empty());
+        src.init().unwrap();
+        let mut batch = RawBatch::new(2, 64);
+        assert_eq!(src.poll_batch(&mut batch).unwrap(), 0);
+        assert!(src.exhausted);
+
+        let bytes = sample_capture();
+        let mut f = NamedTempFile::new().unwrap();
+        f.write_all(&bytes).unwrap();
+        f.flush().unwrap();
+        let loaded = PcapSource::from_path(
+            f.path(),
+            PcapConfig {
+                replay: ReplayMode::FullSpeed,
+                ..PcapConfig::default()
+            },
+            NullEventSink,
+        )
+        .unwrap();
+        assert_eq!(loaded.len(), 3);
+        assert!(load_pcap("/no/such/pcap.file").is_err());
     }
 }

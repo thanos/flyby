@@ -464,6 +464,7 @@ fn io_err(e: io::Error) -> flyby_core::Error {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::dsl::compile_str;
     use std::time::Duration;
 
     #[test]
@@ -477,16 +478,86 @@ mod tests {
     }
 
     #[test]
-    fn format_event_includes_drop() {
-        let line = format_event(&SimEvent {
-            clock_ns: 1_000_000,
-            kind: SimEventKind::PacketDropped {
-                nic: "nic0",
-                seq: 7,
-            },
-        });
-        assert!(line.contains("DROP"));
-        assert!(line.contains("nic0"));
+    fn format_event_covers_kinds() {
+        let cases = [
+            (
+                SimEventKind::PacketGenerated {
+                    nic: "n0",
+                    len: 64,
+                    seq: 1,
+                },
+                "gen",
+            ),
+            (
+                SimEventKind::PacketDropped {
+                    nic: "nic0",
+                    seq: 7,
+                },
+                "DROP",
+            ),
+            (
+                SimEventKind::PacketCorrupted { nic: "n0", seq: 2 },
+                "CORRUPT",
+            ),
+            (SimEventKind::SlotWritten { ring: "r0", seq: 3 }, "write"),
+            (SimEventKind::ConsumerRead { ring: "r0", seq: 4 }, "read"),
+            (SimEventKind::QueueOverflow { ring: "r0" }, "OVERFLOW"),
+            (
+                SimEventKind::TickCompleted {
+                    tick: 9,
+                    duration_ns: 12,
+                },
+                "tick=",
+            ),
+            (
+                SimEventKind::SimulatorStarted {
+                    scenario: "s".into(),
+                },
+                "start",
+            ),
+            (
+                SimEventKind::SimulatorStopped {
+                    ticks: 3,
+                    elapsed_ns: 100,
+                },
+                "stop",
+            ),
+            (
+                SimEventKind::ParserError {
+                    message: "bad".into(),
+                },
+                "ParserError",
+            ),
+            (
+                SimEventKind::PlacementDecision {
+                    strategy: "rr",
+                    count: 2,
+                },
+                "PlacementDecision",
+            ),
+            (
+                SimEventKind::RecordRead {
+                    backend: "file",
+                    offset: 0,
+                    len: 8,
+                },
+                "RecordRead",
+            ),
+            (
+                SimEventKind::RecordDropped {
+                    backend: "file",
+                    offset: 8,
+                },
+                "RecordDropped",
+            ),
+        ];
+        for (kind, needle) in cases {
+            let line = format_event(&SimEvent {
+                clock_ns: 1_000_000,
+                kind,
+            });
+            assert!(line.contains(needle), "missing {needle} in {line}");
+        }
     }
 
     #[test]
@@ -502,5 +573,132 @@ mod tests {
         let snap = dash.snapshot();
         assert_eq!(snap.stats.ticks, 1);
         assert!(!snap.pps_hist.is_empty());
+    }
+
+    #[test]
+    fn dashboard_keys_toggle_speed_restart_and_quit() {
+        let mut dash = Dashboard::new(Scenario {
+            duration: Duration::from_millis(20),
+            tick_ns: 1_000_000,
+            ..Scenario::constant_rate()
+        })
+        .unwrap();
+
+        assert!(
+            !dash
+                .handle_key(KeyCode::Char('+'), KeyModifiers::NONE)
+                .unwrap()
+        );
+        assert_eq!(dash.ticks_per_frame, 2);
+        dash.handle_key(KeyCode::Char('='), KeyModifiers::NONE)
+            .unwrap();
+        assert_eq!(dash.ticks_per_frame, 4);
+        dash.handle_key(KeyCode::Char('-'), KeyModifiers::NONE)
+            .unwrap();
+        assert_eq!(dash.ticks_per_frame, 2);
+        dash.handle_key(KeyCode::Char('_'), KeyModifiers::NONE)
+            .unwrap();
+        assert_eq!(dash.ticks_per_frame, 1);
+
+        dash.handle_key(KeyCode::Char(' '), KeyModifiers::NONE)
+            .unwrap();
+        assert_eq!(dash.mode, RunMode::Auto);
+        dash.auto_ticks().unwrap();
+        assert!(dash.sched.stats().ticks >= 1);
+
+        dash.handle_key(KeyCode::Char(' '), KeyModifiers::NONE)
+            .unwrap();
+        assert_eq!(dash.mode, RunMode::Paused);
+
+        dash.handle_key(KeyCode::Char('s'), KeyModifiers::NONE)
+            .unwrap();
+        dash.handle_key(KeyCode::Right, KeyModifiers::NONE).unwrap();
+
+        dash.handle_key(KeyCode::Char('r'), KeyModifiers::NONE)
+            .unwrap();
+        assert_eq!(dash.mode, RunMode::Paused);
+        assert!(!dash.finished);
+
+        assert!(
+            dash.handle_key(KeyCode::Char('q'), KeyModifiers::NONE)
+                .unwrap()
+        );
+        assert!(dash.handle_key(KeyCode::Esc, KeyModifiers::NONE).unwrap());
+        assert!(
+            dash.handle_key(KeyCode::Char('c'), KeyModifiers::CONTROL)
+                .unwrap()
+        );
+    }
+
+    #[test]
+    fn dashboard_runs_to_finish_and_handles_restart_prompt() {
+        let mut dash = Dashboard::new(Scenario {
+            duration: Duration::from_millis(2),
+            tick_ns: 1_000_000,
+            ..Scenario::constant_rate()
+        })
+        .unwrap();
+        for _ in 0..16 {
+            dash.step_once().unwrap();
+            if dash.finished {
+                break;
+            }
+        }
+        assert!(dash.finished);
+        dash.step_once().unwrap(); // status: finished prompt
+        dash.handle_key(KeyCode::Char(' '), KeyModifiers::NONE)
+            .unwrap();
+        assert!(dash.status.contains("Finished") || dash.status.contains("restart"));
+        dash.handle_key(KeyCode::Char('r'), KeyModifiers::NONE)
+            .unwrap();
+        assert!(!dash.finished);
+    }
+
+    #[test]
+    fn dashboard_compiled_and_special_scenarios() {
+        let compiled = compile_str(
+            r#"
+            [scenario]
+            name = "tui_compiled"
+            duration = "5ms"
+            tick = "1ms"
+            [[nic]]
+            name = "nic0"
+            [nic.traffic]
+            pattern = "fixed"
+            pps = 1000
+            [[consumer]]
+            name = "c0"
+            "#,
+            ".",
+        )
+        .unwrap();
+        let mut dash = Dashboard::new_compiled(compiled).unwrap();
+        dash.step_once().unwrap();
+        assert_eq!(dash.snapshot().scenario_name, "tui_compiled");
+
+        let slow = build_scheduler_builtin(Scenario::slow_consumer(), VecEventSink::new()).unwrap();
+        let _ = slow;
+        let overflow =
+            build_scheduler_builtin(Scenario::queue_overflow(), VecEventSink::new()).unwrap();
+        let _ = overflow;
+    }
+
+    #[test]
+    fn push_hist_caps_length() {
+        let mut buf = Vec::new();
+        for i in 0..10 {
+            push_hist(&mut buf, i, 4);
+        }
+        assert_eq!(buf.len(), 4);
+        assert_eq!(buf, vec![6, 7, 8, 9]);
+    }
+
+    #[test]
+    fn dash_state_default_is_paused() {
+        let s = DashState::default();
+        assert_eq!(s.mode, RunMode::Paused);
+        assert_eq!(s.ticks_per_frame, 1);
+        assert!(!s.finished);
     }
 }
