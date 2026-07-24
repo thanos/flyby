@@ -81,3 +81,89 @@ jobs:
           mdbook-version: "0.4.40"
       - name: Build the project guide
         run: mdbook build docs
+
+  msrv:
+    name: MSRV (1.85)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust toolchain (MSRV 1.85)
+        uses: dtolnay/rust-toolchain@1.85.0
+      - name: Cache cargo registry + target
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: msrv-1.85
+      - name: cargo check (workspace, default features)
+        run: cargo check --workspace --all-targets
+      - name: cargo test -p flyby-core
+        run: cargo test -p flyby-core
+      - name: cargo test -p flyby
+        run: cargo test -p flyby
+
+  benches-compile:
+    name: benches compile
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust toolchain (stable)
+        uses: dtolnay/rust-toolchain@stable
+      - name: Cache cargo registry + target
+        uses: Swatinem/rust-cache@v2
+      - name: Compile Criterion harnesses
+        run: cargo test -p flyby-benches --benches --no-run
+
+  coverage:
+    name: Coverage (Coveralls)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust toolchain (stable)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+      - name: Cache cargo registry + target
+        uses: Swatinem/rust-cache@v2
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+      - name: Generate coverage
+        run: >
+          cargo llvm-cov --workspace --all-features --lcov
+          --output-path lcov.info
+          --ignore-filename-regex '(examples/|benches/|simulator/src/main\.rs)'
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: lcov-report
+          path: lcov.info
+          if-no-files-found: error
+      - name: Upload to Coveralls
+        uses: coverallsapp/github-action@v2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          file: lcov.info
+          format: lcov
+        continue-on-error: true
+
+  publish-check:
+    name: crates.io dry-run
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust toolchain (stable)
+        uses: dtolnay/rust-toolchain@stable
+      - name: Cache cargo registry + target
+        uses: Swatinem/rust-cache@v2
+      - name: Package / dry-run (publish order)
+        run: |
+          set -euo pipefail
+          # Full crates.io dry-run for the leaf crate (no unpublished deps).
+          echo "::group::dry-run flyby-core"
+          cargo publish -p flyby-core --dry-run --locked
+          echo "::endgroup::"
+          # Remaining crates: package metadata only until their path deps
+          # exist on crates.io (verified on the release tag publish job).
+          for crate in flyby-memory flyby-net flyby-storage flyby; do
+            echo "::group::package $crate"
+            cargo package -p "$crate" --no-verify --locked
+            echo "::endgroup::"
+          done

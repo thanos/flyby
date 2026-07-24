@@ -37,3 +37,5 @@ ADRs are numbered, single-file Markdown documents. Copy
 | 0008 | Simulator is a product feature | Accepted |
 | 0009 | Batch-oriented runtime | Accepted |
 | 0010 | Runtime independent of backends | Accepted |
+| 0011 | Simulator required for new features | Accepted |
+| 0012 | Benchmarks are part of the API | Accepted |

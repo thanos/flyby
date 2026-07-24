@@ -44,6 +44,7 @@ defining abstraction of the project.
 ## Where to go next
 
 - [Getting started](./getting-started.md) for a first running pipeline.
+- [Engineering standards](./engineering.md) for contribution quality gates.
 - [Architecture overview](./architecture.md) for the system shape.
 - [Runtime](./runtime.md) for scheduling, back-pressure, and lifecycle.
 - [Simulator](./simulator.md) and [FlyScenario DSL](./scenario-dsl.md) for

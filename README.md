@@ -1,5 +1,12 @@
 # FlyBy
 
+[![CI](https://github.com/anomalyco/flyby/actions/workflows/ci.yml/badge.svg)](https://github.com/anomalyco/flyby/actions/workflows/ci.yml)
+[![crates.io](https://img.shields.io/crates/v/flyby.svg)](https://crates.io/crates/flyby)
+[![docs.rs](https://docs.rs/flyby/badge.svg)](https://docs.rs/flyby)
+[![Coverage Status](https://coveralls.io/repos/github/anomalyco/flyby/badge.svg?branch=main)](https://coveralls.io/github/anomalyco/flyby?branch=main)
+[![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](LICENSE-MIT)
+[![MSRV](https://img.shields.io/badge/MSRV-1.85-blue)](https://blog.rust-lang.org/2025/02/20/Rust-1.85.0/)
+
 A high-performance Rust framework for building composable
 data-ingestion pipelines.
 
@@ -43,7 +50,7 @@ flyby/
 ├── scenarios/            # FlyScenario tutorial files (*.fly.toml)
 ├── articles/             # Medium reproduction catalog
 ├── docs/                 # Project guide (mdBook) + ADRs
-├── .github/workflows/    # CI: fmt, clippy, test, doc, mdbook
+├── .github/workflows/    # CI + Coveralls + crates.io release
 ├── Dockerfile            # Linux dev container
 └── .devcontainer/        # VS Code / Codespaces config
 ```
@@ -95,11 +102,15 @@ VS Code / Codespaces users can open the repo in the configured
 ## Documentation
 
 - **Project guide:** `mdbook serve docs/ --open` (see [`docs/README.md`](docs/README.md))
+- **Engineering standards:** [`docs/src/engineering.md`](docs/src/engineering.md) ·
+  [Testing](docs/src/testing.md) · [Release](docs/src/release.md)
 - **Simulator:** [`docs/src/simulator.md`](docs/src/simulator.md) ·
-  [FlyScenario DSL](docs/src/scenario-dsl.md)
+  [FlyScenario DSL](docs/src/scenario-dsl.md) · [Runtime](docs/src/runtime.md)
+- **Contributing:** [`CONTRIBUTING.md`](CONTRIBUTING.md) · [`SECURITY.md`](SECURITY.md)
 - **API reference:** `cargo doc --workspace --open`
 - **Architecture decisions:** [`docs/src/adr/`](docs/src/adr/)
+- **Changelog:** [`CHANGELOG.md`](CHANGELOG.md)
 
 ## License
 
-Dual-licensed under MIT or Apache-2.0, at your option.
+Dual-licensed under [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE), at your option.

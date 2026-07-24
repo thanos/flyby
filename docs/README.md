@@ -25,6 +25,10 @@ docs/
 │   ├── simulator.md   # product simulator overview + TUI
 │   ├── scenario-dsl.md # FlyScenario TOML + Rhai reference
 │   ├── runtime.md     # Part VII runtime / scheduling / placement
+│   ├── engineering.md # Part VIII standards handbook
+│   ├── testing.md     # testing pyramid
+│   ├── release.md     # release checklist
+│   ├── contributing.md
 │   ├── articles.md    # Medium reproduce-with-one-command
 │   └── benchmarks.md
 └── README.md          # this file
