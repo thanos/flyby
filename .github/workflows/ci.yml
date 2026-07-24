@@ -160,10 +160,11 @@ jobs:
           echo "::group::dry-run flyby-core"
           cargo publish -p flyby-core --dry-run --locked
           echo "::endgroup::"
-          # Remaining crates: package metadata only until their path deps
-          # exist on crates.io (verified on the release tag publish job).
+          # Other crates cannot `cargo package` until their path+version workspace
+          # deps exist on crates.io. `--list` still validates include/exclude
+          # without resolving the registry (verified on the release publish job).
           for crate in flyby-memory flyby-net flyby-storage flyby; do
-            echo "::group::package $crate"
-            cargo package -p "$crate" --no-verify --locked
+            echo "::group::package-list $crate"
+            cargo package -p "$crate" --list --no-verify --locked >/dev/null
             echo "::endgroup::"
           done

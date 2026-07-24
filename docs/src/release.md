@@ -42,6 +42,10 @@ Publish order (also used by CI dry-run and the release workflow):
 4. `flyby-storage`
 5. `flyby` (facade)
 
+CI fully dry-runs `flyby-core`. Other crates only get `cargo package --list`
+until their workspace dependencies exist on crates.io; the release workflow
+performs the real ordered publish.
+
 Non-published workspace members: `flyby-examples`, `flyby-benches`,
 `flyby-simulator`.
 
