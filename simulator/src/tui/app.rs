@@ -435,14 +435,12 @@ fn run_dashboard_inner(mut dash: Dashboard) -> flyby_core::Result<()> {
                 .map_err(io_err)?;
 
             let timeout = tick_rate.saturating_sub(last_tick.elapsed());
-            if event::poll(timeout).map_err(io_err)? {
-                if let Event::Key(key) = event::read().map_err(io_err)? {
-                    if key.kind == KeyEventKind::Press
-                        && dash.handle_key(key.code, key.modifiers)?
-                    {
-                        break;
-                    }
-                }
+            if event::poll(timeout).map_err(io_err)?
+                && let Event::Key(key) = event::read().map_err(io_err)?
+                && key.kind == KeyEventKind::Press
+                && dash.handle_key(key.code, key.modifiers)?
+            {
+                break;
             }
 
             if last_tick.elapsed() >= tick_rate {

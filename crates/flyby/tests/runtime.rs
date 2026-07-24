@@ -122,10 +122,10 @@ impl Sink for CountingSink {
     type Message = Tick;
     fn write(&mut self, message: &Tick) -> Result<()> {
         let mut g = self.written.lock().unwrap();
-        if let Some(limit) = self.fail_after {
-            if g.len() >= limit {
-                return Err(Error::new(ErrorKind::BackPressure, "full"));
-            }
+        if let Some(limit) = self.fail_after
+            && g.len() >= limit
+        {
+            return Err(Error::new(ErrorKind::BackPressure, "full"));
         }
         g.push(message.seq);
         Ok(())
@@ -205,7 +205,7 @@ fn round_robin_placement() {
 fn callback_and_schema_hash_placement() {
     let written = Arc::new(Mutex::new(Vec::new()));
     let place = CallbackPlacement::new(|m: &Tick| {
-        if m.seq % 2 == 0 {
+        if m.seq.is_multiple_of(2) {
             Ok(SinkId::new(1))
         } else {
             Ok(SinkId::NONE)

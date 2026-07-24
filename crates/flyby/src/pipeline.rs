@@ -419,10 +419,10 @@ where
                         | BackpressureStrategy::Spin
                         | BackpressureStrategy::AdaptiveBatching => {
                             retries += 1;
-                            if let Some(max) = max_retries {
-                                if retries > max {
-                                    return Ok(FrameResult::BackPressured);
-                                }
+                            if let Some(max) = max_retries
+                                && retries > max
+                            {
+                                return Ok(FrameResult::BackPressured);
                             }
                             let yield_d = self.runtime.backpressure_yield();
                             if yield_d.is_zero()
@@ -480,16 +480,16 @@ where
     fn shutdown(&mut self) -> Result<()> {
         let mut first_err = None;
         for sink in self.sinks.values_mut() {
-            if let Err(e) = sink.flush().and_then(|_| sink.shutdown()) {
-                if first_err.is_none() {
-                    first_err = Some(e);
-                }
-            }
-        }
-        if let Err(e) = self.source.shutdown() {
-            if first_err.is_none() {
+            if let Err(e) = sink.flush().and_then(|_| sink.shutdown())
+                && first_err.is_none()
+            {
                 first_err = Some(e);
             }
+        }
+        if let Err(e) = self.source.shutdown()
+            && first_err.is_none()
+        {
+            first_err = Some(e);
         }
         self.initialized = false;
         self.pending.clear();
