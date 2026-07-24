@@ -371,23 +371,23 @@ impl<E: EventSink> SimScheduler<E> {
 
         self.apply_timeline(now_ns);
 
-        if let Some(bp) = self.edu.breakpoint_ns {
-            if now_ns >= bp {
-                self.edu.paused = true;
-                return Ok(false);
-            }
+        if let Some(bp) = self.edu.breakpoint_ns
+            && now_ns >= bp
+        {
+            self.edu.paused = true;
+            return Ok(false);
         }
-        if let Some(bp) = self.edu.breakpoint_tick {
-            if self.stats.ticks >= bp {
-                self.edu.paused = true;
-                return Ok(false);
-            }
+        if let Some(bp) = self.edu.breakpoint_tick
+            && self.stats.ticks >= bp
+        {
+            self.edu.paused = true;
+            return Ok(false);
         }
-        if let Some(max) = self.edu.max_steps {
-            if self.stats.ticks >= max {
-                self.edu.paused = true;
-                return Ok(false);
-            }
+        if let Some(max) = self.edu.max_steps
+            && self.stats.ticks >= max
+        {
+            self.edu.paused = true;
+            return Ok(false);
         }
 
         let tick_wall_start = Instant::now();

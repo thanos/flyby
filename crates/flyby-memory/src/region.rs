@@ -194,7 +194,7 @@ impl Region {
         if slot_size > u32::MAX as usize {
             return Err(Error::config("slot_size exceeds u32::MAX"));
         }
-        if slot_size % slot::CACHE_LINE != 0 {
+        if !slot_size.is_multiple_of(slot::CACHE_LINE) {
             return Err(Error::config(
                 "slot_size must be a multiple of CACHE_LINE (64)",
             ));

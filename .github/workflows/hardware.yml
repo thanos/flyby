@@ -1,0 +1,49 @@
+# Hardware / privileged CI (Part VIII §7–§8).
+#
+# This workflow is a *definition* of the self-hosted path. Jobs are gated
+# behind `if: false` until a self-hosted runner with the required labels
+# is available. Enable by removing the guard and setting runner labels.
+#
+# Intended cadence: workflow_dispatch, nightly schedule, or release branches
+# — never a required PR gate.
+
+name: Hardware
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Mondays 06:00 UTC — adjust when runners exist
+    - cron: "0 6 * * 1"
+  push:
+    branches: [release/**]
+
+jobs:
+  privileged-smoke:
+    name: Privileged backend smoke (placeholder)
+    # Replace with: runs-on: [self-hosted, linux, bare-metal, flyby-hw]
+    runs-on: ubuntu-latest
+    if: ${{ false }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust toolchain (stable)
+        uses: dtolnay/rust-toolchain@stable
+      - name: Build with Linux backend features
+        run: cargo build --workspace --features af_xdp,io_uring
+      - name: Placeholder — AF_XDP / io_uring smoke
+        run: |
+          echo "Wire privileged smoke tests here when self-hosted runners exist."
+          echo "Expected: AF_XDP, io_uring, optional DPDK/SPDK feature builds."
+
+  hardware-benches:
+    name: Hardware benchmarks (placeholder)
+    runs-on: ubuntu-latest
+    if: ${{ false }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust toolchain (stable)
+        uses: dtolnay/rust-toolchain@stable
+      - name: Placeholder — Criterion on bare metal
+        run: |
+          echo "Run cargo bench -p flyby-benches on bare metal / EC2 metal."
+          echo "Attach CPU, kernel, NIC, and governor to the report template"
+          echo "in docs/src/benchmarks.md."

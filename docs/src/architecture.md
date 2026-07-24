@@ -89,5 +89,6 @@ Every subsystem must teach:
 - and **how** to measure it.
 
 The documentation is considered part of the implementation. Start with the
-[Simulator](./simulator.md) for the product overview and the
-[FlyScenario DSL](./scenario-dsl.md) for declarative tutorials.
+[Simulator](./simulator.md) for the product overview, the
+[FlyScenario DSL](./scenario-dsl.md) for declarative tutorials, and
+[Engineering standards](./engineering.md) for contribution gates.

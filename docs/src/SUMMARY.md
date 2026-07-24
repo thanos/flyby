@@ -5,10 +5,12 @@
 # Getting started
 
 - [Getting started](./getting-started.md)
+- [Contributing](./contributing.md)
 
 # Architecture
 
 - [Architecture overview](./architecture.md)
+- [Engineering standards](./engineering.md)
 
 # Concepts
 
@@ -38,7 +40,9 @@
 - [FlyScenario DSL](./scenario-dsl.md)
 - [Runtime](./runtime.md)
 - [Medium articles](./articles.md)
+- [Testing](./testing.md)
 - [Benchmarks](./benchmarks.md)
+- [Release process](./release.md)
 
 # Decisions
 
@@ -53,3 +57,5 @@
   - [ADR-0008: Simulator is a product feature](./adr/0008-simulator-is-a-product-feature.md)
   - [ADR-0009: Batch-oriented runtime](./adr/0009-batch-oriented-runtime.md)
   - [ADR-0010: Runtime independent of backends](./adr/0010-runtime-independent-of-backends.md)
+  - [ADR-0011: Simulator required for new features](./adr/0011-simulator-required-for-new-features.md)
+  - [ADR-0012: Benchmarks are part of the API](./adr/0012-benchmarks-are-part-of-the-api.md)
