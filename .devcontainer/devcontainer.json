@@ -3,7 +3,7 @@
   "build": {
     "dockerfile": "../Dockerfile",
     "args": {
-      "RUST_VERSION": "1.91.1",
+      "RUST_VERSION": "1.95.0",
       "DEBIAN_SUITE": "bookworm",
       "UID": "1000",
       "GID": "1000"

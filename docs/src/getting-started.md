@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- Rust **1.85** or newer (workspace MSRV; CI also runs on **stable**).
+- Rust **1.95** or newer (workspace MSRV; CI also runs on **stable**).
 - A Linux host for the AF_XDP / io_uring / DPDK / SPDK backends. The
   shared-memory and simulator backends build anywhere Rust does.
 - (Optional) Docker for the [dev container](../README.md).

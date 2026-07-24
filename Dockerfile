@@ -17,7 +17,7 @@
 # The container runs as the non-root user `flyby` so that files written
 # back to the bind mount match the host's uid/gid (see ARG UID/GID).
 
-ARG RUST_VERSION=1.91.1
+ARG RUST_VERSION=1.95.0
 ARG DEBIAN_SUITE=bookworm
 ARG UID=1000
 ARG GID=1000

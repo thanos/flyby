@@ -5,7 +5,7 @@
 [![docs.rs](https://docs.rs/flyby/badge.svg)](https://docs.rs/flyby)
 [![Coverage Status](https://coveralls.io/repos/github/anomalyco/flyby/badge.svg?branch=main)](https://coveralls.io/github/anomalyco/flyby?branch=main)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](LICENSE-MIT)
-[![MSRV](https://img.shields.io/badge/MSRV-1.85-blue)](https://blog.rust-lang.org/2025/02/20/Rust-1.85.0/)
+[![MSRV](https://img.shields.io/badge/MSRV-1.95-blue)](https://blog.rust-lang.org/2026/04/16/Rust-1.95.0/)
 
 A high-performance Rust framework for building composable
 data-ingestion pipelines.

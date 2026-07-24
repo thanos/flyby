@@ -17,7 +17,7 @@ contribution is expected to meet them.
 | Rule | Policy |
 |---|---|
 | Edition | Rust **2024** (workspace) |
-| MSRV | **1.85** (`rust-version` in root `Cargo.toml`) |
+| MSRV | **1.95** (`rust-version` in root `Cargo.toml`) |
 | Toolchains in CI | **stable** and **MSRV** |
 | Nightly | Avoided unless behind an explicit feature |
 

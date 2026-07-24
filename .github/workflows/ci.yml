@@ -83,16 +83,16 @@ jobs:
         run: mdbook build docs
 
   msrv:
-    name: MSRV (1.85)
+    name: MSRV (1.95)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install Rust toolchain (MSRV 1.85)
-        uses: dtolnay/rust-toolchain@1.85.0
+      - name: Install Rust toolchain (MSRV 1.95)
+        uses: dtolnay/rust-toolchain@1.95.0
       - name: Cache cargo registry + target
         uses: Swatinem/rust-cache@v2
         with:
-          key: msrv-1.85
+          key: msrv-1.95
       - name: cargo check (workspace, default features)
         run: cargo check --workspace --all-targets
       - name: cargo test -p flyby-core

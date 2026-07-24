@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Raised MSRV from **1.85** to **1.95** (matches current toolchain; required
+  by transitive deps such as `darling` / `instability`).
+
 ### Added
 
 - Part VII runtime (`flyby::runtime`): config, schedulers, lifecycle driver,
